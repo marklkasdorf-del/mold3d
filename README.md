@@ -95,7 +95,7 @@ Requirements: Python 3.10-3.12, [Blender](https://www.blender.org) 4.x/5.x (rend
 
 ```bash
 # 1. install as a Claude Code skill (or just clone anywhere and use bin/forge)
-git clone https://github.com/<you>/max-model ~/.claude/skills/max-model
+git clone https://github.com/marklkasdorf-del/max-model ~/.claude/skills/max-model
 cd ~/.claude/skills/max-model
 
 # 2. CAD environment (everything except text3d / looks)
