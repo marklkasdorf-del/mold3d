@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# blender_py <script.py> [args...]  -> Blender headless, args reach the script after "--" (read sys.argv after '--').
+# Blender can segfault (exit 139) inside agent sandboxes that hide the GPU: run it outside the sandbox.
+BL="${BLENDER:-}"
+if [ -z "$BL" ]; then
+  for c in "$(command -v blender 2>/dev/null)" /Applications/Blender.app/Contents/MacOS/Blender /usr/bin/blender; do [ -n "$c" ] && [ -x "$c" ] && BL="$c" && break; done
+fi
+[ -x "$BL" ] || { echo "blender_py: Blender not found (install it or set BLENDER=/path/to/blender)" >&2; exit 127; }
+[ $# -ge 1 ] || { echo "usage: blender_py <script.py> [args...]" >&2; exit 2; }
+SCRIPT="$1"; shift
+[ -f "$SCRIPT" ] || { echo "blender_py: no such script $SCRIPT" >&2; exit 2; }
+"$BL" -b --factory-startup --python "$SCRIPT" -- "$@" 2>&1 | grep -v -E "ArchWarn|ARCH_CACHE_LINE|^ Function: Arch|assumptions.cpp|^ +Line: 140|^Blender [0-9]|^Read prefs|^$"
+rc=${PIPESTATUS[0]}
+if [ "$rc" = 139 ] || [ "$rc" = 134 ]; then
+  echo "blender_py: exit $rc = Blender crashed at startup. Usually an agent sandbox hiding the GPU." >&2
+  echo "  FIX: re-run this exact command outside the sandbox (normal terminals are fine)." >&2
+fi
+exit $rc

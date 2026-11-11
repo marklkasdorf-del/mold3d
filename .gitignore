@@ -1,0 +1,24 @@
+# build outputs and caches
+out/
+parts_cache/
+__pycache__/
+*.pyc
+.venv*/
+venv/
+*.log
+tests/bad/
+tests/last_*.log
+tests/spec_*.json
+# models / weights / checkpoints (never commit)
+lib/text3d/Hunyuan3D-2/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+# per-user calibration (yours, not the repo's)
+knowledge/fit.json
+# OS / editor
+.DS_Store
+.claude/

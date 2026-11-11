@@ -1,0 +1,8 @@
+{
+ "name": "generic 220 FDM (edit me)",
+ "bed": [220, 220, 250],
+ "nozzle": 0.4,
+ "layer": 0.2,
+ "material": "PLA",
+ "slicer_cmd": ""
+}

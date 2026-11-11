@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# forge run <part> [--lane b123d|scad|bpy] [--spec spec.json] [--name N] [--section z=5] [--ref img] [--eevee] [--no-render]
+# forge doctor      (others: bin/verify, bin/render, bin/blender_py)
+F="$(cd "$(dirname "$0")/.." && pwd)"
+# interpreter: $FORGE_CAD_PY, else <skill>/.venv-cad, else python3 on PATH
+PY="${FORGE_CAD_PY:-}"; [ -n "$PY" ] || { [ -x "$F/.venv-cad/bin/python" ] && PY="$F/.venv-cad/bin/python" || PY="$(command -v python3)"; }
+exec "$PY" "$F/lib/forge_cli.py" "$@"

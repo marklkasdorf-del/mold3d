@@ -1,0 +1,12 @@
+{
+  "_comment": "forge spec: success criteria as NUMBERS, written BEFORE modeling. Keys are read by forge/bin/verify. Remove this key or leave it; unknown keys are ignored. Run `forge/bin/verify --help` if a key's shape looks different.",
+  "name": "mypart",
+  "bbox_mm": [80.0, 50.0, 20.0],
+  "bbox_tol": 0.3,
+  "volume_mm3": [19000, 20500],
+  "components": 1,
+  "min_wall_mm": 1.6,
+  "bed": [220, 220, 250],
+  "max_support_pct": 10,
+  "must_be_watertight": true
+}

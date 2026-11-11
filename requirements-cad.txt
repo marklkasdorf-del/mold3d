@@ -1,0 +1,20 @@
+# CAD / verification environment (python 3.10-3.12).  Used by: forge run|verify|preflight|mech|flexify|remix|make|plate|split|
+# gridfinity|photofit|ar|showcase|topo|grade|movecheck|parts-find|step2stl
+#   python3.12 -m venv .venv-cad && .venv-cad/bin/pip install -r requirements-cad.txt
+# Versions below are the ones the benchmark/tests were run with; newer usually works.
+build123d>=0.11
+trimesh>=4.4
+numpy>=1.26
+scipy>=1.11
+pillow>=10
+shapely>=2.0
+manifold3d>=3.0
+rtree>=1.2
+networkx>=3.2
+scikit-image>=0.22
+fast-simplification>=0.1.7
+opencv-python-headless>=4.9      # photofit (ArUco)
+usd-core>=24.0                   # forge ar (USDZ)
+lxml>=5.0                        # 3MF export
+# SDF organic lane (lib/sculpt.py).  Not on PyPI under this name -> install from GitHub (MIT):
+#   pip install git+https://github.com/fogleman/sdf.git

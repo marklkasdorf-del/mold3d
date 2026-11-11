@@ -1,0 +1,28 @@
+# OPTIONAL local text-to-3D + Looks Score environment (python 3.10-3.12). Used by: forge text3d, forge looks
+#   python3.12 -m venv .venv-ai && .venv-ai/bin/pip install -r requirements-ai.txt
+# Also needed once:  git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2 lib/text3d/Hunyuan3D-2
+# Model weights (LCM-Dreamshaper-v7, Hunyuan3D-2mini, CLIP ViT-B/32, rembg isnet) are NOT in this repo:
+# they download from Hugging Face / GitHub on first run and are subject to their own licenses (THIRD_PARTY_NOTICES.md).
+# Torch: install the build for your hardware first if the default wheel is wrong (CUDA index URL, etc.).
+torch>=2.3
+torchvision>=0.18
+diffusers>=0.32,<0.33
+transformers>=4.46,<5
+huggingface_hub<1
+accelerate>=1.0
+safetensors
+rembg>=2.0
+onnxruntime>=1.18
+numpy>=1.26
+scipy>=1.11
+scikit-image>=0.22
+pillow>=10
+trimesh>=4.4
+# Hunyuan3D-2 runtime deps (from its requirements.txt):
+einops
+omegaconf
+pymeshlab
+pygltflib
+xatlas
+opencv-python-headless
+tqdm

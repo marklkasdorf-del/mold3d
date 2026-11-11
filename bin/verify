@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# forge verify: see lib/verify_cli.py --help
+F="$(cd "$(dirname "$0")/.." && pwd)"
+# interpreter: $FORGE_CAD_PY, else <skill>/.venv-cad, else python3 on PATH
+PY="${FORGE_CAD_PY:-}"; [ -n "$PY" ] || { [ -x "$F/.venv-cad/bin/python" ] && PY="$F/.venv-cad/bin/python" || PY="$(command -v python3)"; }
+exec "$PY" "$F/lib/verify_cli.py" "$@"

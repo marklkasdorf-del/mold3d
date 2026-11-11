@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# render <stl> <outdir> [--section z=<mm>|x=<mm>|y=<mm>] [--ref ref.png] [--eevee] [--summary file.txt]
+# Writes <outdir>/views/*.png (annotated) and <outdir>/sheet.png. Needs Blender (see bin/blender_py).
+F="$(cd "$(dirname "$0")/.." && pwd)"
+STL="$1"; OUT="$2"; shift 2 2>/dev/null
+[ -n "$STL" ] && [ -n "$OUT" ] || { sed -n 2,3p "$0"; exit 2; }
+[ -f "$STL" ] || { echo "render: no such STL $STL" >&2; exit 2; }
+BARGS=(); AARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --section) BARGS+=(--section "$2"); shift 2;;
+    --eevee) BARGS+=(--eevee); shift;;
+    --ref) AARGS+=(--ref "$2"); shift 2;;
+    --summary) AARGS+=(--summary "$2"); shift 2;;
+    *) echo "render: unknown arg $1" >&2; exit 2;;
+  esac
+done
+# interpreter: $FORGE_CAD_PY, else <skill>/.venv-cad, else python3 on PATH
+PY="${FORGE_CAD_PY:-}"; [ -n "$PY" ] || { [ -x "$F/.venv-cad/bin/python" ] && PY="$F/.venv-cad/bin/python" || PY="$(command -v python3)"; }
+mkdir -p "$OUT"; rm -rf "$OUT/views" "$OUT/cams.json"
+"$F/bin/blender_py" "$F/lib/render_views.py" "$(cd "$(dirname "$STL")" && pwd)/$(basename "$STL")" "$(cd "$OUT" && pwd)" "${BARGS[@]}" || { echo "render: Blender step failed" >&2; exit 1; }
+[ -f "$OUT/cams.json" ] || { echo "render: Blender produced no cams.json (render failed)" >&2; exit 1; }
+"$PY" "$F/lib/annotate.py" "$OUT" "${AARGS[@]}" || exit 1
+rm -f "$OUT/cams.json"
+echo "render: wrote $OUT/sheet.png and $OUT/views/"

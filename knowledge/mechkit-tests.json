@@ -1,0 +1,113 @@
+{
+ "date": "2026-11-11T16:32",
+ "results": {
+  "fitcard": {
+   "ok": true,
+   "tightest_gap": 0.15,
+   "motions": [
+    [
+     "spin15",
+     0.0,
+     true
+    ],
+    [
+     "spin20",
+     0.0,
+     true
+    ],
+    [
+     "spin25",
+     0.0,
+     true
+    ],
+    [
+     "spin30",
+     0.0,
+     true
+    ],
+    [
+     "spin35",
+     0.0,
+     true
+    ],
+    [
+     "spin40",
+     0.0,
+     true
+    ],
+    [
+     "fold25",
+     0.0,
+     true
+    ],
+    [
+     "fold35",
+     0.0,
+     true
+    ],
+    [
+     "fold45",
+     0.0,
+     true
+    ]
+   ],
+   "seconds": 90.1
+  },
+  "gyro": {
+   "ok": true,
+   "tightest_gap": 0.296,
+   "motions": [
+    [
+     "spin_core",
+     0.0,
+     true
+    ],
+    [
+     "spin_ring1",
+     0.0,
+     true
+    ],
+    [
+     "spin_ring2",
+     0.0,
+     true
+    ],
+    [
+     "spin_ring3",
+     0.0,
+     true
+    ],
+    [
+     "gimbal",
+     0.0,
+     null
+    ]
+   ],
+   "seconds": 55.1
+  },
+  "balisong": {
+   "ok": true,
+   "tightest_gap": 0.3,
+   "motions": [
+    [
+     "flip",
+     0.0,
+     true
+    ]
+   ],
+   "seconds": 4.3
+  },
+  "helix": {
+   "ok": true,
+   "tightest_gap": 0.279,
+   "motions": [
+    [
+     "drop",
+     0.0,
+     true
+    ]
+   ],
+   "seconds": 37.3
+  }
+ }
+}
