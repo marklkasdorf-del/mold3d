@@ -1,0 +1,129 @@
+{
+ "name": "cyclo11",
+ "static": {},
+ "motions": [
+  {
+   "motion": "reduce",
+   "drive": [
+    0,
+    360
+   ],
+   "sweep_worst_mm3": 0.0,
+   "collide_at": null,
+   "control_jams": true
+  },
+  {
+   "motion": "mesh",
+   "drive": [
+    0,
+    30.0
+   ],
+   "sweep_worst_mm3": 0.0,
+   "collide_at": null,
+   "control_jams": true
+  },
+  {
+   "motion": "engage",
+   "drive": [
+    0,
+    0
+   ],
+   "sweep_worst_mm3": 0.0,
+   "collide_at": null,
+   "control_jams": true
+  }
+ ],
+ "ok": true,
+ "gaps": {
+  "housing&disc": 0.3,
+  "disc&carrier": 0.3,
+  "disc&shaft": 0.3,
+  "carrier&shaft": 0.3
+ },
+ "seconds": 113.0,
+ "stl": "out/cyclo11/cyclo11.stl",
+ "meta": {
+  "N": 12,
+  "lobes": 11,
+  "ratio": 11,
+  "output_sign": -1,
+  "input": "shaft",
+  "output": "carrier",
+  "R": 38.0,
+  "r_p": 3.0,
+  "e": 1.5,
+  "gap": 0.3,
+  "vgap": 0.3,
+  "gap_pose": [
+   "reduce",
+   0
+  ],
+  "explode": {
+   "shaft": [
+    0,
+    0,
+    70
+   ],
+   "carrier": [
+    0,
+    0,
+    45
+   ],
+   "disc": [
+    0,
+    0,
+    20
+   ],
+   "housing": [
+    0,
+    0,
+    0
+   ]
+  },
+  "diameter": 86.0,
+  "height": 24.0,
+  "profile": {
+   "valid": true,
+   "lobes": 11,
+   "r_max": 36.2,
+   "r_min": 33.2,
+   "r_max_expected": 36.2,
+   "r_min_expected": 33.2,
+   "rho_min": 12.305,
+   "pin_radius_inflated": 3.3,
+   "undercut": false,
+   "e_over_pitch": 0.474,
+   "area_mm2": 3822.72,
+   "errors": []
+  },
+  "wall_r": 38.0,
+  "tip_reach": 37.7,
+  "accent": {
+   "disc": "orange"
+  },
+  "ice": [
+   {
+    "part": "carrier",
+    "box": [
+     22.05,
+     -2.05,
+     16.9,
+     24.1,
+     2.05,
+     21.05
+    ]
+   },
+   {
+    "part": "shaft",
+    "box": [
+     9.4,
+     -1.05,
+     20.8,
+     12.1,
+     1.05,
+     24.05
+    ]
+   }
+  ]
+ }
+}

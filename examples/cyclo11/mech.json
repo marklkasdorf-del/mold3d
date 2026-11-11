@@ -1,0 +1,263 @@
+{
+ "name": "cyclo11",
+ "parts": [
+  "housing",
+  "disc",
+  "carrier",
+  "shaft"
+ ],
+ "fixed": [
+  "housing"
+ ],
+ "meta": {
+  "N": 12,
+  "lobes": 11,
+  "ratio": 11,
+  "output_sign": -1,
+  "input": "shaft",
+  "output": "carrier",
+  "R": 38.0,
+  "r_p": 3.0,
+  "e": 1.5,
+  "gap": 0.3,
+  "vgap": 0.3,
+  "gap_pose": [
+   "reduce",
+   0
+  ],
+  "explode": {
+   "shaft": [
+    0,
+    0,
+    70
+   ],
+   "carrier": [
+    0,
+    0,
+    45
+   ],
+   "disc": [
+    0,
+    0,
+    20
+   ],
+   "housing": [
+    0,
+    0,
+    0
+   ]
+  },
+  "diameter": 86.0,
+  "height": 24.0,
+  "profile": {
+   "valid": true,
+   "lobes": 11,
+   "r_max": 36.2,
+   "r_min": 33.2,
+   "r_max_expected": 36.2,
+   "r_min_expected": 33.2,
+   "rho_min": 12.305,
+   "pin_radius_inflated": 3.3,
+   "undercut": false,
+   "e_over_pitch": 0.474,
+   "area_mm2": 3822.72,
+   "errors": []
+  },
+  "wall_r": 38.0,
+  "tip_reach": 37.7,
+  "accent": {
+   "disc": "orange"
+  },
+  "ice": [
+   {
+    "part": "carrier",
+    "box": [
+     22.05,
+     -2.05,
+     16.9,
+     24.1,
+     2.05,
+     21.05
+    ]
+   },
+   {
+    "part": "shaft",
+    "box": [
+     9.4,
+     -1.05,
+     20.8,
+     12.1,
+     1.05,
+     24.05
+    ]
+   }
+  ]
+ },
+ "motions": [
+  {
+   "name": "reduce",
+   "drive": [
+    0,
+    360
+   ],
+   "note": "one full input turn: output turns 11:1 slower, opposite way",
+   "moves": [
+    {
+     "part": "shaft",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": 1.0,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "disc",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      1.5,
+      0,
+      0
+     ],
+     "ratio": -1.0909090909090908,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "disc",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": 1.0,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "carrier",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": -0.09090909090909091,
+     "rate": 0.0,
+     "amount": 0.0
+    }
+   ]
+  },
+  {
+   "name": "mesh",
+   "drive": [
+    0,
+    30.0
+   ],
+   "note": "one pin pitch, fine sweep (2.5 deg); the cam alone must jam in the disc bore",
+   "moves": [
+    {
+     "part": "shaft",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": 1.0,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "disc",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      1.5,
+      0,
+      0
+     ],
+     "ratio": -1.0909090909090908,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "disc",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": 1.0,
+     "rate": 0.0,
+     "amount": 0.0
+    },
+    {
+     "part": "carrier",
+     "type": "rot",
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "ratio": -0.09090909090909091,
+     "rate": 0.0,
+     "amount": 0.0
+    }
+   ]
+  },
+  {
+   "name": "engage",
+   "drive": [
+    0,
+    0
+   ],
+   "note": "carrier alone: its pins must hit the disc hole walls",
+   "moves": []
+  }
+ ]
+}

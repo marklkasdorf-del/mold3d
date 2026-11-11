@@ -34,13 +34,17 @@ def _polys(cs):
 
 def _shapely(cs):
     from shapely.geometry import Polygon, MultiPolygon
-    from shapely.ops import unary_union
     polys = []
     for p in cs.to_polygons():
         p = np.asarray(p)
         if len(p) >= 3:
             polys.append(Polygon(p).buffer(0))
-    return unary_union(polys) if polys else Polygon()
+    if not polys:
+        return Polygon()
+    out = polys[0]
+    for q in polys[1:]:
+        out = out.symmetric_difference(q)           # even-odd: a hole stays a hole (a plate with a bore is not a solid disc)
+    return out
 
 
 def _span(u, anchors):

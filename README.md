@@ -4,6 +4,58 @@
 
 A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, tip-over).
 
+## Showpiece: CYCLO-11, a print-in-place cycloidal speed reducer
+
+**One print. 11:1. Ratio -10.9998:1 and 2.1 deg of backlash, measured from the geometry before any plastic.** Four bodies (housing, eccentric disc, output carrier, input shaft), one plate, no assembly, no supports in the design. Built and checked with this skill's own loop.
+
+<p align="center">
+  <img src="docs/images/cyclo11-hero.png" width="55%" alt="CYCLO-11 studio product shot: graphite housing, orange cycloid disc visible through the ceiling gap">
+  <img src="docs/images/cyclo11-cutaway.png" width="43%" alt="section through the pin axis: cam in the disc bore, lobes on pins, carrier pins in the disc holes, 45 degree traps">
+</p>
+<p align="center">
+  <img src="docs/images/cyclo11-exploded.png" width="40%" alt="exploded view: housing, orange disc, carrier, shaft on an axis line">
+  <img src="docs/images/cyclo11-motion.gif" width="50%" alt="one full input turn with the housing ghosted: INPUT 0 to 360 deg, OUTPUT 0 to -32.7 deg, measured ratio and backlash overlay">
+</p>
+<p align="center"><sub>Renders (Cycles, "studio" style), not photos. The GIF replays the exact Moves the self-test swept; the overlay numbers come from `ratio.json`.</sub></p>
+
+| check (all from this run's tool output) | result |
+|---|---|
+| static overlaps, every body pair | none (0.000 mm3) |
+| sweep `reduce` (37 poses, full input turn) / `mesh` (13 poses) | worst overlap 0.000 / 0.000 mm3 |
+| must-jam controls (half a lobe pitch, cam alone, carrier alone) | all 3 jam |
+| gaps at the gap pose (housing-disc, disc-carrier, disc-shaft, carrier-shaft) | 0.300 / 0.300 / 0.300 / 0.300 mm, tightest 0.300 |
+| **measured ratio** (`forge mech ratio cyclo11`, 24 poses, full turn) | **-10.9998 : 1** (declared -11, within 0.5 %) |
+| **measured backlash** at the output | **2.10 deg = 126 arcmin** (min 2.05, max 2.29 over 24 poses) |
+| `forge movecheck` | 4 bodies, 0 interpenetration, min gap 0.300 mm |
+| `forge run` verify | PASS: bbox 86 x 86 x 24 mm, 4 components, 83.8 cm3, min wall 2.4 mm |
+| `forge preflight` | CAUTION only from the `pip` first-layer note; no floating islands, unsupported overhang 0.8 mm2, one bridge of 16.3 mm, supports: off |
+
+The gaps and the ratio are **verified in geometry, not on real plastic**: print the Fit Card, run `forge fit set pip_gap <n>`, rebuild, and every gap re-flows. Backlash here is the output carrier's free play with the cam and disc held (the disc's own lobe/pin play is not included). The files are in [`examples/cyclo11/`](examples/cyclo11/) (STLs, `spec.json`, `selftest.json`, `ratio.json`, `preflight.json`).
+
+### How the cycloidal build works
+- **Exact profile** (`lib/cycloid.py`): 12 pins on R = 38, 11 lobes, eccentricity 1.5 (47 % of the pin pitch), pins inflated by the print gap so the clearance is uniform along the whole flank. `checks()` asserts a simple polygon, 11 lobes, r_max = 36.20, r_min = 33.20, no undercut (smallest convex radius of curvature 12.3 mm vs the 3.3 mm inflated pin).
+- **Everything grows from the bed**: housing wall and pins, the disc, the carrier pins (45 degree base flares caught by 45 degree counter-cones in the disc), the cam. Every overhang is a 45 degree cone, so the plate over the stack is the only bridge.
+- **The wall is sized from the motion**: the farthest lobe tip reaches 37.7 mm from the axis during the cycle, so `cycloidal.build()` computes the housing wall (38.0) instead of guessing.
+- **Parametric**: `forge mech build cycloidal N=16 R=45` builds a 15:1 (the profile checks run first and raise on an undercut).
+- **Measured, not declared**: `forge mech ratio` poses the mechanism, frees the output and bisects for the contact-free angle interval, 24 times around the turn.
+
+```bash
+forge mech build cyclo11                                    # build + self-test + export (about 2 min)
+forge mech ratio cyclo11                                    # measured ratio + backlash -> out/cyclo11/ratio.json
+forge mech ratio planetary --motion mesh --driven ring --driver sun      # same tool on the planetary: -1/3
+forge run examples/cyclo11/cyclo11_part.py --name cyclo11 --spec examples/cyclo11/spec.json
+forge preflight out/cyclo11/cyclo11.stl
+forge showcase out/cyclo11 --style studio --still hero      # also: cutaway (y=0 section), exploded
+forge showcase out/cyclo11 --motion reduce --style studio --ghost housing --annotate --elev 55
+```
+
+New render flags (`forge showcase`, Blender): `--style studio|paper` (studio = Cycles + denoise, AgX, dark field with a shadow-catcher floor, graphite material, 3-light rig, 85 mm camera fitted to the part), `--accent PART[,PART]` (orange part), `--ghost PART` (12 % alpha, no shadow), `--section x|y|z=VAL` (boolean cut per part, cap faces coloured), `--explode` (offsets from `meta.explode`, with an axis line), `--still hero|cutaway|exploded`, `--annotate` (INPUT / OUTPUT angle, ratio, measured ratio and backlash burned into every frame), plus `--samples`, `--elev`, `--az`, `--fill`, `--yshift`. `forge mech ratio` exits 3 when the measured ratio differs from the declared one by more than 0.5 % (`--declared N` overrides the declared value).
+
+![annotated verification sheet](docs/images/cyclo11-verify-sheet.png)
+<p align="center"><sub>The verification sheet `forge run` writes for every iteration: six views, bbox, scale bars, grid, checks.</sub></p>
+
+## More examples
+
 <p align="center">
   <img src="docs/images/planetary.png" width="32%" alt="print-in-place planetary gear fidget, built and swept by MechKit">
   <img src="docs/images/gyro.png" width="32%" alt="nested-ring gyroscope with spherical collision-proof zones">
@@ -11,10 +63,14 @@ A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `
 </p>
 <p align="center"><sub>Print-in-place planetary gears, a gyroscope and an articulated gecko: all generated by code, each one swept through its full motion range (and a must-jam control) before export. Renders, not photos: see "What is not proven yet".</sub></p>
 
+<p align="center"><img src="docs/images/verify-sheet-dragon.png" width="70%" alt="annotated six-view verification sheet of a text-to-3D dragon on a name plinth"></p>
+
+---
+
 ---
 
 ## Contents
-- [Why it works](#why-it-works) · [What it does](#what-it-does) · [Benchmark](#benchmark-honest-numbers) · [Install](#quickstart)
+- [CYCLO-11](#showpiece-cyclo-11-a-print-in-place-cycloidal-speed-reducer) · [Why it works](#why-it-works) · [What it does](#what-it-does) · [Benchmark](#benchmark-honest-numbers) · [Install](#quickstart)
 - [Command reference](#command-reference) · [How the loop works](#how-the-loop-works) · [Prompts](#example-prompts)
 - [Repo layout](#repo-layout) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Credits and licenses](#credits-and-licenses)
 
@@ -29,15 +85,12 @@ LLMs write plausible CAD scripts, but they cannot see an STL, they misremember d
 5. **Preflight before the slicer**; its verdict (GO / CAUTION / GO+SUPPORTS / NO-GO) decides supports and blocks bad prints.
 6. **Know the weak spot.** Hand-modeled organic and iconic shapes look like blobs, so the skill routes those to find-and-remix, local text-to-3D, or flexify instead of pretending.
 
-<p align="center"><img src="docs/images/verify-sheet-dragon.png" width="85%" alt="annotated six-view verification sheet with bbox, rulers and grid"></p>
-<p align="center"><sub>The verification sheet `forge run` produces for every iteration: six views, bbox, scale bars, grid. (This one is a text-to-3D dragon on a name plinth.)</sub></p>
-
 ## What it does
 
 | Area | Commands | What you get |
 |---|---|---|
 | **Build + verify loop** | `forge run`, `verify`, `render`, `topo`, `step2stl`, `parts-find` | build123d / OpenSCAD / bpy parts, numeric checks, annotated sheets, addressable faces ("the hole at `s1.f7`"), real standard-part dimensions from STEP |
-| **MechKit** | `forge mech list / build / test` | Verified print-in-place mechanisms: Fit Card calibration print, gyroscope, planetary gears, balisong trainer, helix pass-through, pin hinge, plus a `Mech` API for new ones |
+| **MechKit** | `forge mech list / build / test / ratio` | Verified print-in-place mechanisms (with a measured ratio + backlash tool): Fit Card calibration print, gyroscope, planetary gears, cycloidal reducer, balisong trainer, helix pass-through, pin hinge, plus a `Mech` API for new ones |
 | **Flexify** | `forge flexify` | Any creature mesh -> print-in-place articulated "flexi" (lap joints on cone pins, joint self-test) |
 | **Text -> 3D (local)** | `forge text3d "<idea>"` | LCM-Dreamshaper concept -> Hunyuan3D-2mini shape -> watertight, scaled, flat-based figure + preflight. Optional `--flexi`, `--helmet` (wearable, sized to a head) |
 | **Remix** | `forge remix <stl> text / keychain / magnets / thicken / fit-head / flat / mirror / scale` | Upgrade any download: text that follows curves, keychain loop, magnet pockets with real walls, medial-surface wall thickening, scale-to-head |
@@ -153,7 +206,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 | `verify` | `bin/verify model.stl [--spec spec.json]`, `--orient` (rank the 6 lay-down orientations), `--assembly a.stl b.stl --clearance 0.3 --move-b=x,y,z` |
 | `preflight` | `forge preflight model.stl [--slice] [--orient] [--heat] [--json out.json]` verdict + supports decision |
 | `heat` | `forge heat model.stl` support heatmap PNGs (Blender) |
-| `mech` | `forge mech list`, `build <name> [k=v ...]`, `test [names]` (builds + self-tests, writes the scoreboard) |
+| `mech` | `forge mech list`, `build <name> [k=v ...]`, `test [names]` (builds + self-tests, writes the scoreboard), `ratio <name> [--motion M --driven PART --driver PART --declared N]` (measured ratio + backlash, exit 3 on mismatch) |
 | `fit` | `forge fit show`, `forge fit set <key> <mm> --from "<print>"` |
 | `flexify` | `forge flexify model.stl [--spacing 13] [--theta 25] [--out DIR]` |
 | `sculpt` | SDF organic lane (see `lib/sculpt.py`) |
@@ -166,7 +219,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 | `gridfinity` | `forge gridfinity bin 2 1 3 [--magnets] [--divs 2] [--label]`, `base 4 3` |
 | `photofit` | `forge photofit mat` then `forge photofit photo.jpg [--depth 15] [--bin auto]` |
 | `ar` | `forge ar model.stl [--parts DIR] [--color grey]` -> `.usdz` + `.glb` |
-| `showcase` | `forge showcase <dir\|stl>` -> mp4, GIF, poster, `listing.md` |
+| `showcase` | `forge showcase <dir\|stl>` -> mp4, GIF, poster, `listing.md`; studio look: `--style studio --still hero\|cutaway\|exploded`, `--section y=0`, `--explode`, `--accent`, `--ghost`, `--annotate` |
 | `topo` | `forge topo part.step [--face s1.f7 \| --near=x,y,z \| --edges]` addressable faces + features |
 | `parts-find` / `step2stl` | `forge parts-find "M3 socket head 12" [--download]`, `forge step2stl in.step [out.stl]` |
 | `movecheck` / `grade` | per-joint gaps + fuse risk; voxel IoU vs a ground-truth mesh |
@@ -207,6 +260,7 @@ templates/            spec.md/spec.json, part_b123d.py, part_scad.scad, part_bpy
 tests/                run_all.sh (smoke), run_suite.sh (known-answer suite); fixtures are generated on the fly
 bench/                the blind benchmark attempt scripts
 docs/images/          demo renders
+examples/cyclo11/     the CYCLO-11 showpiece: STLs, spec, selftest / ratio / preflight JSON
 requirements-cad.txt  requirements-ai.txt
 ```
 

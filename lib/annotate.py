@@ -178,4 +178,5 @@ def main():
     print("ANNOTATED", [os.path.basename(p) for p in sorted(os.listdir(vdir))])
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -128,8 +128,9 @@ def _wall_single(mesh, min_wall, seed=0):
     org = pts - nor * 1e-3
     d, hit_i = tri_ray_first_hit(org, -nor, mesh.triangles, return_idx=True)
     # An ACUTE EDGE (e.g. a slot meeting a floor at 65 deg) gives tiny ray distances next to the edge although there is no thin WALL.
-    # A real wall = the hit face roughly opposes the start face (n . n_hit < -0.5). Field test 2026-10-14 (air_stand) false FAIL.
-    opposing = np.einsum("ij,ij->i", nor, mesh.face_normals[hit_i]) < -0.5
+    # A real wall = the hit face roughly opposes the start face (n . n_hit < -0.8). Field test 2026-10-14 (air_stand) false FAIL.
+    # -0.8 (hit face within ~37 deg of antiparallel): a 45-deg chamfer/flare meeting the bed (normals 135 deg apart, dot -0.71) is a taper edge, not a wall.
+    opposing = np.einsum("ij,ij->i", nor, mesh.face_normals[hit_i]) < -0.8
     good = np.isfinite(d) & opposing
     thin = (d < (min_wall - 1e-3)) & opposing
     res = {"samples": n, "thin_samples": int(thin.sum()), "thin_area_mm2": float(thin.sum() * area / n), "clusters": []}

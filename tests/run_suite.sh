@@ -8,7 +8,25 @@ no() { echo "FAIL  $1  ($2)"; fail=$((fail+1)); }
 cd "$L"
 
 # 1 MechKit: every mechanism builds, sweeps clear, controls jam, gaps ~ pip_gap
-if "$CAD" -m mechkit.cli test fitcard gyro balisong helix > "$T/mech.log" 2>&1; then ok "mechkit fitcard/gyro/balisong/helix self-tests"; else no "mechkit" "see $T/mech.log"; fi
+if "$CAD" -m mechkit.cli test fitcard gyro balisong helix cycloidal > "$T/mech.log" 2>&1; then ok "mechkit fitcard/gyro/balisong/helix/cycloidal self-tests"; else no "mechkit" "see $T/mech.log"; fi
+
+# 1b cycloid profile known answers: N=12 R=38 r_p=3 e=1.5 gap=0.3 -> 11 lobes, r_max 36.20 +-0.05, r_min >= 33.2, simple polygon;
+#     an undercut (pin radius above the smallest convex radius of curvature, 12.3 mm here) and e >= R/N must raise
+"$CAD" - <<'PY' && ok "cycloid profile: 11 lobes, r_max 36.20, r_min >= 33.2, simple; undercut + bad eccentricity raise" || no "cycloid profile" "known answers differ"
+import sys; sys.path.insert(0, '.'); import cycloid
+c = cycloid.checks(12, 38, 3, 1.5, 0.3)
+assert c["valid"] and c["lobes"] == 11 and abs(c["r_max"] - 36.2) <= 0.05 and c["r_min"] >= 33.2 - 0.05 and not c["undercut"], c
+for bad in (dict(r_p=12.5), dict(e=3.5)):
+    try: cycloid.checks(**{**dict(N=12, R=38, r_p=3, e=1.5, gap=0.3), **bad}); sys.exit("did not raise: %s" % bad)
+    except ValueError: pass
+PY
+
+# 1c measured ratio: planetary (ring/sun, mesh) = -zs/zr = -1/3 within 0.5 %, cyclo11 = -11.00 within 0.5 %, a wrong declared ratio -> exit 3
+"$CAD" -m mechkit.cli ratio planetary --motion mesh --driven ring --driver sun --out "$T/pl_ratio" > "$T/ratio_pl.log" 2>&1
+"$CAD" -c "import json,sys;r=json.load(open('$T/pl_ratio/ratio.json'));sys.exit(0 if abs(r['measured_out_per_in']+1/3)<0.005/3 else 1)" && ok "measured ratio planetary = $(grep -o 'out/in [^)]*' "$T/ratio_pl.log")" || no "ratio planetary" "see $T/ratio_pl.log"
+"$CAD" -m mechkit.cli ratio cyclo11 --out "$T/cy_ratio" > "$T/ratio_cy.log" 2>&1
+"$CAD" -c "import json,sys;r=json.load(open('$T/cy_ratio/ratio.json'));sys.exit(0 if abs(r['measured']+11)<0.055 else 1)" && ok "measured ratio cyclo11 = $("$CAD" -c "import json;print(json.load(open('$T/cy_ratio/ratio.json'))['measured'])"):1" || no "ratio cyclo11" "see $T/ratio_cy.log"
+"$CAD" -m mechkit.cli ratio cyclo11 --declared 10 --out "$T/cy_ratio10" > /dev/null 2>&1; [ $? = 3 ] && ok "a wrong declared ratio (10 vs 11) is a mismatch (exit 3)" || no "ratio mismatch" "exit code not 3"
 
 # 2 flexify: SDF gecko -> all joints pass, no floating pieces
 "$CAD" sculpt.py "$T/gecko.stl" > /dev/null 2>&1

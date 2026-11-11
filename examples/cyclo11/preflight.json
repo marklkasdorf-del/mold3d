@@ -1,0 +1,41 @@
+{
+ "file": "cyclo11.stl",
+ "bbox_mm": [
+  86.0,
+  86.0,
+  24.0
+ ],
+ "volume_cm3": 83.82,
+ "issues": [
+  {
+   "level": "CAUTION",
+   "code": "pip",
+   "msg": "2 first-layer gap(s) under 0.35 mm: elephant foot may weld them (pip_gap 0.3 is still a research default)",
+   "fix": "print the Fit Card once (forge mech build fitcard) -> forge fit set pip_gap <smallest free>"
+  }
+ ],
+ "notes": [],
+ "contact_mm2": 4800.8,
+ "contact_patch_mm": [
+  85.99,
+  85.99
+ ],
+ "center_of_mass": [
+  0.6,
+  -0.0,
+  9.4
+ ],
+ "com_margin_mm": 42.4,
+ "floating_islands": [],
+ "overhang_unsupported_mm2": 0.8,
+ "bridges": {
+  "count": 1,
+  "max_span_mm": 16.3
+ },
+ "walls_under_1p2": [],
+ "walls_under_2p0_layers": 0,
+ "bodies": 4,
+ "pip_min_gap": 0.299,
+ "verdict": "CAUTION",
+ "supports": "off"
+}

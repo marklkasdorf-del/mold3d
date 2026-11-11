@@ -228,7 +228,7 @@ NEW = {
     "heat": cmd_heat,
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),
     "ar": lambda r: _cad("ar.py", r),
-    "showcase": lambda r: _cad("showcase.py", r),
+    "showcase": lambda r: _cad("showcase.py", ([os.path.abspath(r[0])] + r[1:]) if r else r),
     "gridfinity": lambda r: _cad("gridfinity.py", r),
     "photofit": lambda r: _cad("photofit.py", r),
     "split": lambda r: _cad("split.py", r),

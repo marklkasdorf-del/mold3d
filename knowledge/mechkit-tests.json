@@ -1,5 +1,5 @@
 {
- "date": "2026-11-11T16:32",
+ "date": "2026-11-11T17:57",
  "results": {
   "fitcard": {
    "ok": true,
@@ -51,7 +51,7 @@
      true
     ]
    ],
-   "seconds": 90.1
+   "seconds": 89.0
   },
   "gyro": {
    "ok": true,
@@ -83,7 +83,7 @@
      null
     ]
    ],
-   "seconds": 55.1
+   "seconds": 54.9
   },
   "balisong": {
    "ok": true,
@@ -107,7 +107,29 @@
      true
     ]
    ],
-   "seconds": 37.3
+   "seconds": 37.8
+  },
+  "cycloidal": {
+   "ok": true,
+   "tightest_gap": 0.3,
+   "motions": [
+    [
+     "reduce",
+     0.0,
+     true
+    ],
+    [
+     "mesh",
+     0.0,
+     true
+    ],
+    [
+     "engage",
+     0.0,
+     true
+    ]
+   ],
+   "seconds": 112.6
   }
  }
 }
