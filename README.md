@@ -2,7 +2,7 @@
 
 **Getting Claude Code or Codex to design 3D parts that actually work, and actually print, is famously hard. max-model fixes it with a build -> verify loop: the agent never gets to say "looks good", only to read numbers.**
 
-A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, tip-over).
+A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, auto-support traps, tip-over).
 
 ## Showpiece: CYCLO-11, a print-in-place cycloidal speed reducer
 
@@ -28,7 +28,9 @@ A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `
 | **measured backlash** at the output | **2.10 deg = 126 arcmin** (min 2.05, max 2.29 over 24 poses) |
 | `forge movecheck` | 4 bodies, 0 interpenetration, min gap 0.300 mm |
 | `forge run` verify | PASS: bbox 86 x 86 x 24 mm, 4 components, 83.8 cm3, min wall 2.4 mm |
-| `forge preflight` | CAUTION only from the `pip` first-layer note; no floating islands, unsupported overhang 0.8 mm2, one bridge of 16.3 mm, supports: off |
+| `forge preflight` | CAUTION only from the `pip` first-layer note; no floating islands, unsupported overhang 0.8 mm2, one bridge of 16.3 mm; **auto-support traps: 2 regions, 974 mm2 of flat underside 0.30 mm over another body -> SUPPORTS: OFF (required)** |
+
+**PRINT NOTE: supports OFF, no brim, print `examples/cyclo11/cyclo11_SUPPORTS-OFF.3mf` (made by `forge export`).** A slicer's "auto supports" fills the 0.3 mm gaps under the flat carrier plate and welds the parts. Honest history: the first real print of this part was ruined exactly that way (auto supports ticked, the gearbox tore into 3 pieces on removal), which is why preflight now has an auto-support trap check and `forge export` exists. See [`examples/cyclo11/PRINT-NOTE.md`](examples/cyclo11/PRINT-NOTE.md).
 
 The gaps and the ratio are **verified in geometry, not on real plastic**: print the Fit Card, run `forge fit set pip_gap <n>`, rebuild, and every gap re-flows. Backlash here is the output carrier's free play with the cam and disc held (the disc's own lobe/pin play is not included). The files are in [`examples/cyclo11/`](examples/cyclo11/) (STLs, `spec.json`, `selftest.json`, `ratio.json`, `preflight.json`).
 
@@ -45,6 +47,7 @@ forge mech ratio cyclo11                                    # measured ratio + b
 forge mech ratio planetary --motion mesh --driven ring --driver sun      # same tool on the planetary: -1/3
 forge run examples/cyclo11/cyclo11_part.py --name cyclo11 --spec examples/cyclo11/spec.json
 forge preflight out/cyclo11/cyclo11.stl
+forge export out/cyclo11/cyclo11.stl                        # -> cyclo11_SUPPORTS-OFF.3mf: the supports decision travels with the file
 forge showcase out/cyclo11 --style studio --still hero      # also: cutaway (y=0 section), exploded
 forge showcase out/cyclo11 --motion reduce --style studio --ghost housing --annotate --elev 55
 ```
@@ -205,6 +208,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 | `run` | `forge run part.py [--lane b123d\|scad\|bpy] [--spec spec.json] [--name N] [--section z=5] [--ref img] [--eevee] [--no-render]` -> `out/<name>/` with STL, sheet, verify.json, REPORT.md, `iter_NN/` |
 | `verify` | `bin/verify model.stl [--spec spec.json]`, `--orient` (rank the 6 lay-down orientations), `--assembly a.stl b.stl --clearance 0.3 --move-b=x,y,z` |
 | `preflight` | `forge preflight model.stl [--slice] [--orient] [--heat] [--json out.json]` verdict + supports decision |
+| `export` | `forge export model.stl [--supports on\|off\|auto] [--out file.3mf]` 3MF that carries the supports decision (Orca/Bambu/AnkerMake `enable_support`, PrusaSlicer `support_material`); default name ends `_SUPPORTS-OFF` / `_SUPPORTS-ON`; auto = the preflight verdict |
 | `heat` | `forge heat model.stl` support heatmap PNGs (Blender) |
 | `mech` | `forge mech list`, `build <name> [k=v ...]`, `test [names]` (builds + self-tests, writes the scoreboard), `ratio <name> [--motion M --driven PART --driver PART --declared N]` (measured ratio + backlash, exit 3 on mismatch) |
 | `fit` | `forge fit show`, `forge fit set <key> <mm> --from "<print>"` |
@@ -237,7 +241,7 @@ spec (numbers) -> reference pass (look at the real thing) -> look up real dimens
  ^                                                              |
  |   verify.json: watertight, bbox vs spec, walls, overhang %, components, bed fit
  |   sheet.png: 6 annotated views     selftest.json: sweep clear, control jams, gaps
- |   preflight: contact, tip-over, islands, bridges, thin walls, fused gaps
+ |   preflight: contact, tip-over, islands, bridges, thin walls, fused gaps, auto-support traps
  +------------------------ fix what the numbers say ------------+
  v
 STL in print pose + supports decision  ->  your slicer  ->  (optional) AR preview, showcase, listing

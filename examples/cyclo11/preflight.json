@@ -12,6 +12,18 @@
    "code": "pip",
    "msg": "2 first-layer gap(s) under 0.35 mm: elephant foot may weld them (pip_gap 0.3 is still a research default)",
    "fix": "print the Fit Card once (forge mech build fitcard) -> forge fit set pip_gap <smallest free>"
+  },
+  {
+   "level": "TRAP",
+   "code": "traps",
+   "msg": "auto supports would fill the 0.30 mm gap between body 2 (z 0.0-21.0, 46 mm wide) and body 1 (z 0.0-10.0, 71 mm wide) (flat underside, 895 mm2, around xy [-0.5, 0.4], z=10.3) and weld them -> supports must be OFF",
+   "fix": "untick supports / print the `forge export` 3MF; or make that underside steeper than 30 deg from horizontal (chamfer to 45)"
+  },
+  {
+   "level": "TRAP",
+   "code": "traps",
+   "msg": "auto supports would fill the 0.30 mm gap between body 2 (z 0.0-21.0, 46 mm wide) and body 3 (z 0.0-24.0, 24 mm wide) (flat underside, 79 mm2, around xy [3.7, 0.5], z=10.3) and weld them -> supports must be OFF",
+   "fix": "untick supports / print the `forge export` 3MF; or make that underside steeper than 30 deg from horizontal (chamfer to 45)"
   }
  ],
  "notes": [],
@@ -36,6 +48,36 @@
  "walls_under_2p0_layers": 0,
  "bodies": 4,
  "pip_min_gap": 0.299,
+ "support_angle_deg": 30.0,
+ "support_traps": [
+  {
+   "upper": "body 2 (z 0.0-21.0, 46 mm wide)",
+   "lower": "body 1 (z 0.0-10.0, 71 mm wide)",
+   "area_mm2": 894.7,
+   "gap_min_mm": 0.3,
+   "gap_mean_mm": 0.3,
+   "xy": [
+    -0.5,
+    0.4
+   ],
+   "z": 10.3,
+   "samples": 894
+  },
+  {
+   "upper": "body 2 (z 0.0-21.0, 46 mm wide)",
+   "lower": "body 3 (z 0.0-24.0, 24 mm wide)",
+   "area_mm2": 79.1,
+   "gap_min_mm": 0.3,
+   "gap_mean_mm": 0.3,
+   "xy": [
+    3.7,
+    0.5
+   ],
+   "z": 10.3,
+   "samples": 79
+  }
+ ],
  "verdict": "CAUTION",
- "supports": "off"
+ "supports": "off",
+ "supports_text": "SUPPORTS: OFF (required) - auto supports would weld 974 mm2 of 2 gap region(s)"
 }

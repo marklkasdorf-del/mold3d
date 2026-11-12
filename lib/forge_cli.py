@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""forge <run|doctor> ...   (see bin/forge --help)
+"""forge <run|doctor|preflight|export|...> ...   (see bin/forge --help)
 run <part_file> [--lane b123d|scad|bpy] [--spec spec.json] [--name N] [--no-render] [--section z=5] [--ref img] [--eevee]
   -> out/<name>/{<name>.stl, views/, sheet.png, verify.json, REPORT.md, src.*, iter_NN/}. Exit 1 on FAIL."""
 import argparse, json, os, shutil, subprocess, sys, shlex
@@ -226,6 +226,7 @@ NEW = {
     "flexify": lambda r: _cad("flexify.py", r),
     "preflight": lambda r: _cad("preflight.py", r),
     "heat": cmd_heat,
+    "export": lambda r: _cad("export3mf.py", [os.path.abspath(x) if i == 0 or (i and r[i - 1] == "--out") else x for i, x in enumerate(r)]),
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),
     "ar": lambda r: _cad("ar.py", r),
     "showcase": lambda r: _cad("showcase.py", ([os.path.abspath(r[0])] + r[1:]) if r else r),
@@ -246,7 +247,7 @@ if len(sys.argv) > 1 and sys.argv[1] in NEW:
     NEW[sys.argv[1]](sys.argv[2:])
 
 ap = argparse.ArgumentParser(prog="forge", epilog="also: topo | parts-find | step2stl | movecheck | grade | mech | fit | "
-                             "flexify | preflight | heat | text3d | ar | showcase | gridfinity | photofit | split | sculpt | looks | remix | make | plate")
+                             "flexify | preflight | export | heat | text3d | ar | showcase | gridfinity | photofit | split | sculpt | looks | remix | make | plate")
 sub = ap.add_subparsers(dest="cmd", required=True)
 r = sub.add_parser("run"); r.add_argument("part"); r.add_argument("--lane", choices=["b123d", "scad", "bpy"]); r.add_argument("--spec"); r.add_argument("--name")
 r.add_argument("--no-render", action="store_true"); r.add_argument("--section"); r.add_argument("--ref"); r.add_argument("--eevee", action="store_true")

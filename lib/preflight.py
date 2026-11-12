@@ -10,9 +10,12 @@ Checks (each one is a real failure seen while building and benchmarking this ski
   overhang   area past 45 deg per layer; unsupported spans anchored on 2+ sides and < 18 mm = OK bridge
   walls      walls < 1.2 mm (won't print) and < 2.0 mm; per layer, opening by offset
   pip        print-in-place: separate bodies closer than fit.pip_gap; first-layer gaps < 0.35 mm fuse (elephant foot)
+  traps      AUTO-SUPPORT TRAPS: flat-ish undersides (slope from horizontal < support_angle, default 30) that sit < 2 mm over a
+             DIFFERENT body; a slicer's "auto supports" would fill that gap and weld the parts (CYCLO-11's first print died of this)
   bed        fits the printer bed (knowledge/printer.json)
 Verdict: GO / CAUTION / GO+SUPPORTS (prints fine with the supports box ticked) / NO-GO (no checkbox saves it),
 with plain-English reasons + fixes (geometry, orientation, supports on/off; never slicer tuning).
+Traps => the report says "SUPPORTS: OFF (required)"; `forge export model.stl` carries that into a 3MF the slicer obeys.
 """
 import argparse, json, math, os, subprocess, sys
 import numpy as np
@@ -65,6 +68,46 @@ def _span(u, anchors):
             if su.contains(p):
                 best = max(best, p.distance(an))
     return 2 * best
+
+
+def support_traps(t, angle=None, max_gap=None, samples_per_mm2=1.0, cap=30000):
+    """auto-support traps: downward faces NOT on the bed whose slope from horizontal is < angle (slicers auto-support those),
+    raycast straight down to the next solid; if that solid is a DIFFERENT body closer than max_gap, supports would fill the gap.
+    -> list of dicts (one per body pair): area_mm2, gap_min/mean_mm, xy, z, bodies [upper, lower]. Pure trimesh (rtree ray engine)."""
+    import trimesh
+    angle = float(printer.get("support_angle") if angle is None else angle)
+    max_gap = float(printer.get("support_trap_gap") if max_gap is None else max_gap)
+    n = t.face_normals
+    fz = t.vertices[t.faces][:, :, 2]
+    sel = np.where((-n[:, 2] > math.cos(math.radians(angle))) & (fz.min(axis=1) > 0.05))[0]      # downward, flat-ish, off the bed
+    if not len(sel) or len(t.faces) == 0:
+        return []
+    label = trimesh.graph.connected_component_labels(t.face_adjacency, node_count=len(t.faces))
+    sub = t.submesh([sel], append=True)
+    npts = int(min(cap, max(200, sub.area * samples_per_mm2)))
+    pts, fi = trimesh.sample.sample_surface(sub, npts, seed=0)
+    src = label[sel[fi]]
+    w = sub.area / len(pts)                                           # each sample stands for this much underside area
+    org = pts - np.array([0, 0, 0.01])
+    loc, ir, it = t.ray.intersects_location(org, np.tile([0.0, 0.0, -1.0], (len(pts), 1)), multiple_hits=False)
+    dst = label[it]
+    gap = pts[ir, 2] - loc[:, 2]
+    hit = (dst != src[ir]) & (gap < max_gap) & (gap > 0.0)
+    out = {}
+    for k in np.where(hit)[0]:
+        out.setdefault((int(src[ir[k]]), int(dst[k])), []).append(k)
+    res = []
+    for (a, b), ks in out.items():
+        ks = np.array(ks)
+        p = pts[ir[ks]]
+        def nm(c):
+            bb = t.submesh([np.where(label == c)[0]], append=True).bounds
+            return f"body {c} (z {bb[0][2]:.1f}-{bb[1][2]:.1f}, {bb[1][0] - bb[0][0]:.0f} mm wide)"
+        res.append({"upper": nm(a), "lower": nm(b), "area_mm2": round(float(len(ks) * w), 1), "gap_min_mm": round(float(gap[ks].min()), 2),
+                    "gap_mean_mm": round(float(gap[ks].mean()), 2), "xy": [round(float(p[:, 0].mean()), 1), round(float(p[:, 1].mean()), 1)],
+                    "z": round(float(p[:, 2].mean()), 1), "samples": int(len(ks))})
+    res.sort(key=lambda r: -r["area_mm2"])
+    return res
 
 
 def analyse(path, do_slice=False, allow_tight=False):
@@ -227,18 +270,39 @@ def analyse(path, do_slice=False, allow_tight=False):
         elif fuse:
             R["notes"].append(f"{fuse} first-layer gaps at the calibrated pip_gap {g} [V] (Fit Card proved they break free)")
 
+    # ---- auto-support traps (needs the body split above)
+    R["support_angle_deg"] = float(printer.get("support_angle"))
+    R["support_traps"] = []
+    if len(bodies) > 1:
+        try:
+            R["support_traps"] = support_traps(t)
+        except Exception as e:
+            R["notes"].append(f"support-trap check skipped: {e!r}"[:120])
+    for tr in R["support_traps"]:
+        issue("TRAP", "traps", f"auto supports would fill the {tr['gap_min_mm']:.2f} mm gap between {tr['upper']} and {tr['lower']} "
+              f"(flat underside, {tr['area_mm2']:.0f} mm2, around xy {tr['xy']}, z={tr['z']}) and weld them -> supports must be OFF",
+              "untick supports / print the `forge export` 3MF; or make that underside steeper than "
+              f"{R['support_angle_deg']:g} deg from horizontal (chamfer to 45)")
+
     # ---- slice (real time / grams via the slicer hook)
     if do_slice:
-        t, g = printer.slice_stats(path, "on" if (floating or over_area > 120) else "off", timeout=1800)
+        t, g = printer.slice_stats(path, "off" if R["support_traps"] else "on" if (floating or over_area > 120) else "off", timeout=1800)
         if t: R["print_time"] = t
         if g: R["grams"] = g
         if not t and not g:
             R["notes"].append("no slicer hook configured (printer.json slicer_cmd / FORGE_SLICER_CMD): slice the STL in your own slicer")
 
     lv = [i["level"] for i in R["issues"]]
+    if "TRAP" in lv and "SUPPORTS" in lv:
+        issue("NO-GO", "traps", "this part NEEDS supports (mid-air islands / steep overhangs) but supports would weld the print-in-place gaps "
+              "-> no checkbox saves it", "re-orient so nothing needs support, chamfer the flat undersides to 45 deg, or print the bodies separately")
+        lv = [i["level"] for i in R["issues"]]
     R["verdict"] = ("NO-GO" if "NO-GO" in lv else "GO+SUPPORTS" if "SUPPORTS" in lv else
                     "CAUTION" if "CAUTION" in lv else "GO")
     R["supports"] = "on" if "SUPPORTS" in lv else "off"
+    R["supports_text"] = ("SUPPORTS: OFF (required) - auto supports would weld " + f"{sum(t_['area_mm2'] for t_ in R['support_traps']):.0f} mm2 of "
+                          f"{len(R['support_traps'])} gap region(s)") if "TRAP" in lv and "SUPPORTS" not in lv and R["verdict"] != "NO-GO" else \
+        "SUPPORTS: ON (needed)" if R["supports"] == "on" else "SUPPORTS: off (not needed)"
     return R, M
 
 
@@ -300,6 +364,7 @@ def report(R):
     icon = R["verdict"]
     print(f"[{icon}] {R['file']}  bbox {R['bbox_mm']} mm  vol {R['volume_cm3']} cm3  contact {R.get('contact_mm2')} mm2 "
           f"patch {R.get('contact_patch_mm')}  bodies {R.get('bodies')}")
+    print(f"   {R['supports_text']}")
     for i in R["issues"]:
         print(f"   {i['level']:8s} {i['code']:9s} {i['msg']}")
         if i.get("fix"):
@@ -315,6 +380,7 @@ if __name__ == "__main__":
     ap.add_argument("model"); ap.add_argument("--slice", action="store_true"); ap.add_argument("--json")
     ap.add_argument("--heat", help="write a risk-coloured PLY here (render with forge heat)")
     ap.add_argument("--allow-tight", action="store_true", help="calibration prints (Fit Card): tight gaps are intended")
+    ap.add_argument("--support-angle", type=float, help="slicer auto-support threshold, deg from horizontal (default: printer profile support_angle, 30)")
     ap.add_argument("--orient", action="store_true", help="search tilts for the best print pose (organic parts)")
     a = ap.parse_args()
     if a.orient:
@@ -322,6 +388,8 @@ if __name__ == "__main__":
             print(f"   pose rot_x={c['rot_x']:4d} rot_y={c['rot_y']:4d}: contact {c['contact_mm2']:6.0f} mm2, overhang "
                   f"{c['overhang_mm2']:6.0f} mm2, height {c['height']:5.1f}, fits {c['fits']}  score {c['score']}")
         sys.exit(0)
+    if a.support_angle is not None:
+        os.environ["FORGE_SUPPORT_ANGLE"] = str(a.support_angle)
     R, M = analyse(a.model, a.slice, a.allow_tight)
     report(R)
     if a.json:

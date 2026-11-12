@@ -4,5 +4,7 @@
  "nozzle": 0.4,
  "layer": 0.2,
  "material": "PLA",
- "slicer_cmd": ""
+ "slicer_cmd": "",
+ "support_angle": 30,
+ "support_trap_gap": 2.0
 }

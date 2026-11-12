@@ -73,6 +73,21 @@ except AssertionError: pass
 assert_solid(a)"
 t "f5. step2stl round-trips a STEP" 0 bash -c "'$B/forge' step2stl '$D/p.step' '$D/p.stl' && '$B/verify' '$D/p.stl' --spec <(echo '{\"bbox_mm\":[60,40,25],\"bbox_tol\":0.2}')"
 t "f6. two bodies are walled per-body (no gap-as-wall)" 0 bash -c "'$B/verify' '$D/two.stl' --spec <(echo '{\"components\":2,\"min_wall_mm\":1.2}') | grep -q 'per body'"
+
+# (g) auto-support trap + 3MF export through the real CLI: two bodies 0.3 mm apart (flat lid over a slab) -> trap; the 3MF says supports OFF
+"$CADPY" - "$D" <<'PYEOF'
+import sys, trimesh
+d = sys.argv[1]
+slab = trimesh.creation.box([40, 40, 10]); slab.apply_translation([0, 0, 5]); lid = trimesh.creation.box([20, 20, 4]); lid.apply_translation([0, 0, 12.3])
+trimesh.util.concatenate([slab, lid]).export(f"{d}/trap_float.stl")          # lid floats in mid-air: needs supports AND supports weld -> NO-GO
+hole = trimesh.creation.box([7, 7, 12]); hole.apply_translation([0, 0, 5]); slab = trimesh.boolean.difference([slab, hole], engine="manifold")
+pin = trimesh.creation.box([6, 6, 14.3]); pin.apply_translation([0, 0, 7.15]); cap = trimesh.creation.box([10, 10, 4]); cap.apply_translation([0, 0, 12.3])
+trimesh.util.concatenate([slab, trimesh.boolean.union([pin, cap], engine="manifold")]).export(f"{d}/trap2.stl")   # pin through the slab, cap 0.3 mm over it
+PYEOF
+t "g1. preflight flags the 0.3 mm flat bridge over another body" 0 bash -c "'$B/forge' preflight '$D/trap2.stl' | grep -q 'auto supports would fill the 0.30 mm gap'"
+t "g2. forge export writes *_SUPPORTS-OFF.3mf with enable_support 0" 0 bash -c "'$B/forge' export '$D/trap2.stl' --no-orca >/dev/null; unzip -p '$D/trap2_SUPPORTS-OFF.3mf' Metadata/project_settings.config | grep -q '\"enable_support\": \"0\"'"
+t "g2b. a lid that floats over a slab needs supports AND supports weld: export auto refuses (NO-GO)" 1 "$B/forge" export "$D/trap_float.stl" --no-orca
+t "g3. forge export of a single-body box (auto) -> SUPPORTS-OFF too, no trap" 0 bash -c "'$B/forge' export '$D/ok.stl' --no-orca | grep -q 'supports OFF' && ! '$B/forge' preflight '$D/ok.stl' | grep -q TRAP"
 if [ -n "$FORGE_TEST_NET" ]; then t "f7. parts-find (needs network)" 0 bash -c "'$B/forge' parts-find 'M3 socket head 12' --limit 2 | grep -q iso4762"; fi
 rm -f "$F"/tests/spec_*.json
 echo; echo "RESULT: $pass passed, $fail failed"

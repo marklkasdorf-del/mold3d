@@ -45,6 +45,44 @@ PY
 chk() { v=$("$CAD" preflight.py "$T/$1.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/'); [ "$v" = "$2" ] && ok "preflight $1 -> $2" || no "preflight $1" "got $v, want $2"; }
 chk sphere NO-GO; chk bridge30 GO+SUPPORTS; chk bridge10 GO; chk floating GO+SUPPORTS
 
+# 3b auto-support traps: a flat underside 0.3 mm over ANOTHER body fires; the same on one body / a 45 deg underside / a far gap does not;
+#    cyclo11's real carrier-over-disc gap (0.30 mm) fires and its verdict says SUPPORTS: OFF (required)
+"$CAD" - <<'PY' && ok "support_traps: flat 0.3 mm bridge over another body fires, single body / 45 deg V / 5 mm gap do not" || no "support_traps" "known answers differ"
+import sys; sys.path.insert(0, '.'); import trimesh, numpy as np, preflight
+def slab(): b = trimesh.creation.box([40, 40, 10]); b.apply_translation([0, 0, 5]); return b
+def lid(z, w=20): b = trimesh.creation.box([w, w, 4]); b.apply_translation([0, 0, z + 2]); return b
+two = trimesh.util.concatenate([slab(), lid(10.3)])
+tr = preflight.support_traps(two)
+assert len(tr) == 1 and abs(tr[0]["gap_min_mm"] - 0.3) < 0.05 and abs(tr[0]["area_mm2"] - 400) < 25, tr
+assert preflight.support_traps(trimesh.util.concatenate([slab(), lid(15)])) == []                 # 5 mm gap: supports would not weld it
+assert preflight.support_traps(slab()) == []                                                      # one body
+d = trimesh.creation.box([14.14, 20, 14.14]); d.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 4, [0, 1, 0]))
+d.apply_translation([0, 0, 10.3 + 10])                                                            # diamond: V underside at 45 deg, tip 0.3 over the slab
+assert preflight.support_traps(trimesh.util.concatenate([slab(), d])) == [], "45 deg underside must not trap"
+assert preflight.support_traps(two, angle=0.0) == [], "angle 0 = threshold off"
+PY
+"$CAD" preflight.py "$F/examples/cyclo11/cyclo11.stl" --json "$T/cy_pf.json" > "$T/cy_pf.txt" 2>&1
+grep -q "SUPPORTS: OFF (required)" "$T/cy_pf.txt" && "$CAD" -c "import json,sys;r=json.load(open('$T/cy_pf.json'));t=r['support_traps'];sys.exit(0 if t and t[0]['gap_min_mm']<0.35 and sum(x['area_mm2'] for x in t)>500 and r['supports']=='off' else 1)" \
+  && ok "preflight cyclo11: support_traps fire (0.30 mm gaps), SUPPORTS: OFF (required)" || no "cyclo11 traps" "see $T/cy_pf.txt"
+"$CAD" preflight.py "$T/bridge10.stl" --json "$T/br_pf.json" > /dev/null 2>&1
+"$CAD" -c "import json,sys;r=json.load(open('$T/br_pf.json'));sys.exit(0 if r['support_traps']==[] and 'required' not in r['supports_text'] else 1)" && ok "preflight single-body part: no support traps" || no "single body" "traps fired"
+
+# 3c forge export: 3MF is valid, carries the supports decision (Orca JSON + Prusa lines), default name has the suffix, auto follows preflight
+"$CAD" export3mf.py "$F/examples/cyclo11/cyclo11.stl" --out "$T/cy_auto.3mf" --no-orca > "$T/exp.log" 2>&1; rc=$?
+"$CAD" export3mf.py "$T/bridge30.stl" --no-orca > "$T/exp2.log" 2>&1; rc2=$?
+"$CAD" export3mf.py "$T/bridge10.stl" --supports on --out "$T/b10_on.3mf" --no-orca > /dev/null 2>&1
+"$CAD" - "$T" $rc $rc2 <<'PY' && ok "export: cyclo11 auto -> supports OFF 3MF (orca 0 / prusa 0), bridge30 auto -> *_SUPPORTS-ON.3mf, --supports on honoured" || no "export" "see $T/exp.log"
+import sys, zipfile, json, os, trimesh; sys.path.insert(0, '.'); import export3mf
+T, rc, rc2 = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]); assert rc == 0 and rc2 == 0
+tris, ext, ce, pm = export3mf.check_3mf(T + '/cy_auto.3mf'); assert ce == '0' and pm == '0' and tris > 1000 and abs(ext[0] - 86) < 0.5 and abs(ext[2] - 24) < 0.5, (tris, ext, ce, pm)
+z = zipfile.ZipFile(T + '/cy_auto.3mf'); names = z.namelist()
+assert {'[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model', 'Metadata/project_settings.config', 'Metadata/Slic3r_PE.config'} <= set(names), names
+assert json.loads(z.read('Metadata/project_settings.config')) == {'enable_support': '0', 'support_type': 'normal(auto)'}   # ONLY the supports checkbox
+assert '; support_material_auto = 0' in z.read('Metadata/Slic3r_PE.config').decode()
+assert os.path.exists(T + '/bridge30_SUPPORTS-ON.3mf') and export3mf.check_3mf(T + '/bridge30_SUPPORTS-ON.3mf')[2] == '1'
+assert export3mf.check_3mf(T + '/b10_on.3mf')[2:] == ('1', '1')
+PY
+
 # 4 gridfinity: a 1x1x6 bin is 41.5 x 41.5 mm (42 grid - 0.5 clearance) and 6 x 7 mm + stacking lip tall (~45.8)
 "$CAD" gridfinity.py bin 1 1 6 --magnets --out "$T/gf.stl" > /dev/null 2>&1
 read gx gy gz < <("$CAD" -c "import trimesh;e=trimesh.load('$T/gf.stl').extents;print(*[round(float(v),1) for v in e])" 2>/dev/null)

@@ -1,1 +1,1 @@
-{"name": "AnkerMake M5C (example)", "bed": [220, 220, 250], "nozzle": 0.4, "layer": 0.2, "material": "PLA", "slicer_cmd": ""}
+{"name": "AnkerMake M5C (example)", "bed": [220, 220, 250], "nozzle": 0.4, "layer": 0.2, "material": "PLA", "slicer_cmd": "", "support_angle": 30, "support_trap_gap": 2.0}

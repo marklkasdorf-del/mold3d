@@ -18,7 +18,8 @@ import json, os, re, subprocess
 import forge_env
 
 DEFAULT = {"name": "generic 220 FDM", "bed": [220.0, 220.0, 250.0], "nozzle": 0.4, "layer": 0.2,
-           "material": "PLA", "slicer_cmd": ""}
+           "material": "PLA", "slicer_cmd": "",
+           "support_angle": 30, "support_trap_gap": 2.0}   # slicer auto-support threshold (deg from horizontal; Orca default 30); max gap a support would bridge-fill
 
 
 def _path():
@@ -35,6 +36,8 @@ def load():
 
 
 def get(key):
+    if key == "support_angle" and os.environ.get("FORGE_SUPPORT_ANGLE"):
+        return float(os.environ["FORGE_SUPPORT_ANGLE"])
     return load()[key]
 
 

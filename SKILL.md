@@ -45,7 +45,7 @@ Printer: `knowledge/printer.json` (bed, nozzle, layer; examples in `knowledge/pr
 2. **Spec before model** for custom parts: `spec.md` + `spec.json` with numeric success criteria first.
 3. **One change per iteration**, keep every `iter_NN/`, max 6 per phase, then re-plan.
 4. **Anything that moves ships with a passing self-test** (sweep clear + must-jam control + measured gaps). No exceptions; it is the reason mechanisms are the strength of this skill.
-5. **Every print gets `forge preflight` before the slice**, and its verdict decides supports. NO-GO = fix geometry/orientation first.
+5. **Every print gets `forge preflight` before the slice**, and its verdict decides supports. NO-GO = fix geometry/orientation first. **Print-in-place / multi-body parts also get `forge export <stl>` and you hand over the 3MF, not the STL**: a slicer's auto supports fill the gaps and weld the parts (CYCLO-11's first print died that way), and an STL can't carry "supports off".
 6. **Environment:** Blender, OpenSCAD and GPU torch (text3d, looks) can crash inside some agent sandboxes that hide the GPU (Blender exits 139). If a step segfaults, run it outside the sandbox. Pure python (build123d, manifold3d, trimesh) runs anywhere.
 7. **Report milestones briefly** (route chosen, first render, print-ready with time/grams/verdict, blocker): one line each, say what the user must decide. Send key images (sheet.png, poster.png) and AR files when the channel supports files.
 8. Never start a print or spend money without the user's explicit OK. Downloaded models: respect the license (CC BY-NC = no selling).
@@ -113,8 +113,9 @@ Finish when verify passes every spec key, selftest passes (movers), preflight is
 
 ## PHASE 5 — PRINT PREP + HAND-OFF
 1. `forge preflight <stl> [--slice]` -> verdict + supports decision. Organic/tilted parts: `forge preflight <stl> --orient` (tries tilts; one helmet wanted ~20 deg). `forge heat <stl>` makes the red/yellow support heatmap to show him.
-2. Supports = preflight's call: GO -> off; GO+SUPPORTS -> on/auto; NO-GO -> fix first (knife-edge contact, fused gaps, doesn't fit -> `forge split`).
-3. Slice in YOUR slicer of choice with the supports decision from step 2 and your normal profile; forge never changes slicer settings. (Optional: set `slicer_cmd` in `knowledge/printer.json` so `preflight --slice` / `plate --slice` report time and grams.)
+2. Supports = preflight's call: GO -> off; GO+SUPPORTS -> on/auto; NO-GO -> fix first (knife-edge contact, fused gaps, doesn't fit -> `forge split`). "SUPPORTS: OFF (required)" = auto-support trap (a flat underside < 30 deg from horizontal sits < 2 mm over a DIFFERENT body; `support_angle` / `support_trap_gap` in the printer profile): supports must stay OFF or they weld the gap.
+2b. **Always, before handing a print-in-place / multi-body file to a user: `forge preflight <stl>` then `forge export <stl>`** (auto follows the verdict; name ends `_SUPPORTS-OFF.3mf` / `_SUPPORTS-ON.3mf`). Give them the 3MF and say: open this file, check the Support box matches the filename, change nothing else. If preflight is NO-GO because it needs supports AND supports would weld, fix the geometry (chamfer flat undersides to 45 deg, re-orient) before exporting.
+3. Slice the exported 3MF (or the STL for plain single-body parts) in YOUR slicer of choice with the supports decision from step 2 and your normal profile; forge only sets the supports checkbox, via the 3MF. (Optional: set `slicer_cmd` in `knowledge/printer.json` so `preflight --slice` / `plate --slice` report time and grams.)
 4. Show the user: sheet or showcase poster + time/grams (if the hook is set) + verdict + one-line recipe. Offer `forge ar <stl>` (USDZ: opens as a real-size preview on iPhone/Vision Pro; GLB for Quest) when size/fit is the question.
 5. Never start a print without the user's OK: "Bed clear? Starting <name>, ~<time>, <g> g."
 6. Report "<name> print-ready: <time>, <g> g, <verdict>." Selling? `forge showcase <dir>` writes mp4/gif + listing.md (cost, suggested price, license reminder).
@@ -145,7 +146,8 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 | `flexify model.stl` | any creature -> print-in-place flexi (lap joints on cone pins, self-healing joint placement) | SDF gecko 7 joints +-22 deg, 3 s |
 | `sculpt` | SDF organic lane (gecko recipe in lib/sculpt.py) | watertight in 3 s |
 | `text3d "idea" [--base N] [--flexi] [--helmet]` | local text->concept->Hunyuan3D->printable figure + preflight + slice; `--helmet` = wearable 2-piece helmet | 4 figures ~3.5 min each; helmet v2 looks 5.3% vs egg 0.9% (the real prop scored 13.5%), 34.5 h / 742 g |
-| `preflight stl [--slice/--orient/--heat]`, `heat` | failure prediction: knife-edge contact, mid-air islands, bridges vs cantilevers, thin walls, fused PIP gaps, tip-over | 4/4 known cases correct |
+| `preflight stl [--slice/--orient/--heat]`, `heat` | failure prediction: knife-edge contact, mid-air islands, bridges vs cantilevers, thin walls, fused PIP gaps, auto-support traps, tip-over |
+| `export stl [--supports on/off/auto] [--out f.3mf]` | 3MF carrying the supports checkbox into Orca/Bambu/AnkerMake/Prusa slicers; `_SUPPORTS-OFF`/`-ON` in the name | 4/4 known cases correct |
 | `looks stl --target "x"` | recognizability score (CLIP, clean renders) | ranked all 3 bench pairs like a human |
 | `split stl [--scale]` | bed-sized pieces, smallest seams, pins + engraved seam IDs, pins.stl | 290 mm dragon -> 6 pieces, 2 s |
 | `photofit mat` / `photofit photo.jpg` | Calibration Mat (ArUco) -> exact outline -> Gridfinity pocket bin | 72x24 test: -0.12/-0.25 mm |
@@ -188,4 +190,4 @@ Give up and switch when: 6 iterations without passing; same failure twice after 
 Habits that keep usage low: one sheet read per iteration, small scripts, deterministic tools over re-asking. No subagent fan-outs for CAD.
 
 ## File map
-`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `out/<name>/`.
+`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, export3mf.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `out/<name>/`.
