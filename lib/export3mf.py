@@ -29,7 +29,7 @@ def model_xml(V, F, title, center):
     vs = "".join(f'<vertex x="{x:.5f}" y="{y:.5f}" z="{z:.5f}"/>' for x, y, z in V)
     ts = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in F)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
-            f'<metadata name="Title">{title}</metadata><metadata name="Application">max-model forge export</metadata>'
+            f'<metadata name="Title">{title}</metadata><metadata name="Application">Mold3D forge export</metadata>'
             f'<resources><object id="1" type="model"><mesh><vertices>{vs}</vertices><triangles>{ts}</triangles></mesh></object></resources>'
             f'<build><item objectid="1" transform="1 0 0 0 1 0 0 0 1 {tx:.3f} {ty:.3f} 0"/></build></model>')
 

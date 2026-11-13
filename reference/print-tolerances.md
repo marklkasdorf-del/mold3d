@@ -70,5 +70,5 @@ Goal: turn [R]/[K] guesses into [V] numbers on THIS printer.
    `| date | printer/material | interface | design gap (mm) | result (tight/snug/loose/fail) | adopted value | part/print id |`
    Example: `| 2026-10-20 | my-printer PLA grey | lid lip/box | 0.30 | snug | 0.30 | lidbox |`
 3. If the result changes a default, edit the table above: replace the tag with **[V]** and cite the date, e.g. `0.30 [V 2026-10-20]`. Never delete the older [R] number; strike it out.
-4. At the start of every max-model session read `knowledge/fit-log.md` first and use [V] values for all new parameter blocks.
+4. At the start of every Mold3D session read `knowledge/fit-log.md` first and use [V] values for all new parameter blocks.
 5. If two prints disagree, keep both rows and prefer the newer; investigate (wet filament, first-layer squash, orientation) before changing a default.

@@ -7,13 +7,13 @@
 2026-10-17 · benchmark · 3/3 print-in-place mechanisms passed sweeps first build; looks lost on every iconic object -> mandatory REFERENCE PASS (forge refs) before modeling named things · phase 1b
 2026-10-17 · benchmark · motion sweep needs a negative control; a 3-lobe part offset 120 deg is a no-op control (symmetry) · phase 3
 2026-10-17 · benchmark · balisong: keep each handle's swept volume on its own side of y=0 => pivot PY >= (bar_inner+bar_w)/2; widening bars without moving pivots crashed at 180 deg (sweep caught it) · phase 3
-2026-10-17 · max-model 2.0 · control tests must check the PATH not the end pose (gimbal ring clear at 25 deg, jams at 10) · phase 3
-2026-10-17 · max-model 2.0 · coplanar cutter faces leave zero-thickness skins that weld pins (gap 0.0): extend cutters 0.05 mm · phase 3
-2026-10-17 · max-model 2.0 · manifold3d CW outline = empty solid; build123d Polygon needs tuples (JSON lists -> zero-area sliver) · phase 3
-2026-10-17 · max-model 2.0 · export angular_tolerance 0.05: coarse facets on big spheres ate 0.06 of a 0.3 mm gap · phase 3
-2026-10-17 · max-model 2.0 · Taubin smoothing only on uniform voxel meshes (melted a plinth); smooth before adding sharp parts · phase 3
-2026-10-17 · max-model 2.0 · CLIP looks-score only on clean photo-like renders; annotated CAD views mislead it · phase 3
-2026-10-17 · max-model 2.0 · image->3D reads a top view as a front view; flat flexis come from the outline (relief.py) · phase 0
+2026-10-17 · Mold3D 2.0 · control tests must check the PATH not the end pose (gimbal ring clear at 25 deg, jams at 10) · phase 3
+2026-10-17 · Mold3D 2.0 · coplanar cutter faces leave zero-thickness skins that weld pins (gap 0.0): extend cutters 0.05 mm · phase 3
+2026-10-17 · Mold3D 2.0 · manifold3d CW outline = empty solid; build123d Polygon needs tuples (JSON lists -> zero-area sliver) · phase 3
+2026-10-17 · Mold3D 2.0 · export angular_tolerance 0.05: coarse facets on big spheres ate 0.06 of a 0.3 mm gap · phase 3
+2026-10-17 · Mold3D 2.0 · Taubin smoothing only on uniform voxel meshes (melted a plinth); smooth before adding sharp parts · phase 3
+2026-10-17 · Mold3D 2.0 · CLIP looks-score only on clean photo-like renders; annotated CAD views mislead it · phase 3
+2026-10-17 · Mold3D 2.0 · image->3D reads a top view as a front view; flat flexis come from the outline (relief.py) · phase 0
 2026-11-09 · bridge turbine · accessory keyed into an existing part's own holes (triangle key + split-prong barbs out the far face) = positive lock with zero changes to the host; barb flex via manifold sweep of the prong against the tunnel (1.04 mm, 0.66% strain) · phase 3
 2026-11-09 · bridge turbine · looks: pointed spinner reads "airplane propeller"; tower height was the real lever (hub 110->128 mm: 38->48%, 4/6 views) · phase 3
 2026-11-09 · bridge turbine · horizontal axle printed as part of the upright tower beats a separate 5x25 pin (preflight NO-GO knife edge); 45-deg conical seat replaces a drooping flat flange and self-centres · phase 2/5

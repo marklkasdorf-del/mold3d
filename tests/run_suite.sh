@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# max-model regression suite (pure python/CAD stack, no Blender, no model weights). Every check has a KNOWN right answer.
+# Mold3D regression suite (pure python/CAD stack, no Blender, no model weights). Every check has a KNOWN right answer.
 # Self-contained: all inputs are generated here. Set FORGE_CAD_PY to your CAD venv python.
 . "$(dirname "$0")/env.sh"; L="$F/lib"; T="$F/out/tests_v2"
 mkdir -p "$T"; pass=0; fail=0
@@ -132,4 +132,4 @@ done
 k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_test 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['items'])")
 [ "${k:-0}" -ge 20 ] && ok "plate --fill packs $k keychains on one bed" || no "plate" "$k items"
 
-echo; echo "max-model suite: $pass passed, $fail failed"; [ $fail -eq 0 ]
+echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

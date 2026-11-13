@@ -1,6 +1,6 @@
 # Third-party notices
 
-max-model itself is MIT licensed (see LICENSE). It builds on, calls, or was inspired by the projects below.
+Mold3D itself is MIT licensed (see LICENSE). It builds on, calls, or was inspired by the projects below.
 **No model weights, no third-party source trees, and no third-party datasets are bundled in this repository.**
 
 ## Code incorporated into this repository

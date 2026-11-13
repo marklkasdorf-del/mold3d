@@ -1,4 +1,4 @@
-# verification-playbook.md — how to read max-model's evidence (numbers first, pictures second)
+# verification-playbook.md — how to read Mold3D's evidence (numbers first, pictures second)
 
 Core law (ModelRift benchmark): "Every defect that would have ruined a print was found by a number instead: a volume, an angle, an interference test." Renders work for massing, proportion and "the column is in the wrong place"; they fail for **wall thickness, clearance, and whether a boolean quietly deleted half your part.** Claude also cannot read an STL by itself — it "will tell you it can... it's just bullshitting you" (Dave Snider). Never describe a binary STL from memory; only from `verify.json` and the rendered PNGs.
 

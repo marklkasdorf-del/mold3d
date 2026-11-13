@@ -1,11 +1,11 @@
 ---
-name: max-model
+name: mold3d
 version: 2.1.0
 user-invocable: true
-description: Idea-to-printable-3D-model studio for FDM printers. Use when asked to "model / design / make me a <thing> to print", "3D model this", "CAD this", "custom mount/case/holder/adapter/lid/bracket", "fidget", "print-in-place", "something that moves", "flexi <animal>", "figure / statue / mascot of <x>", "text to 3D", "gridfinity", "insert for my <thing>", "split this for my bed", "will this print", "calibrate my printer", "see it in AR", "put my name on", "add a keychain loop", "add magnets", "fix thin walls", "scale to my head", "make me a box", "keychains", "sign", "phone stand", "lithophane", "max model", "/max-model", or "forge". Code-CAD (build123d/OpenSCAD/bpy) + MechKit verified mechanisms + local text-to-3D + flexify + preflight failure prediction; hands a verified STL to your slicer.
+description: Idea-to-printable-3D-model studio for FDM printers. Use when asked to "model / design / make me a <thing> to print", "3D model this", "CAD this", "custom mount/case/holder/adapter/lid/bracket", "fidget", "print-in-place", "something that moves", "flexi <animal>", "figure / statue / mascot of <x>", "text to 3D", "gridfinity", "insert for my <thing>", "split this for my bed", "will this print", "calibrate my printer", "see it in AR", "put my name on", "add a keychain loop", "add magnets", "fix thin walls", "scale to my head", "make me a box", "keychains", "sign", "phone stand", "lithophane", "mold 3d", "/mold3d", or "forge". Code-CAD (build123d/OpenSCAD/bpy) + MechKit verified mechanisms + local text-to-3D + flexify + preflight failure prediction; hands a verified STL to your slicer.
 triggers:
-  - max model
-  - /max-model
+  - mold 3d
+  - /mold3d
   - forge
   - model this for 3d printing
   - design a part to print
@@ -31,10 +31,10 @@ allowed-tools:
   - Agent
 ---
 
-# max-model: idea -> verified, printable part
+# Mold3D: idea -> verified, printable part
 
-The ask: whatever the user typed after /max-model (or the thing they described).
-`FORGE` = this skill's directory (e.g. `~/.claude/skills/max-model`); every path below is relative to it. One CLI: `$FORGE/bin/forge <cmd>` (list at the bottom).
+The ask: whatever the user typed after /mold3d (or the thing they described).
+`FORGE` = this skill's directory (e.g. `~/.claude/skills/mold3d`); every path below is relative to it. One CLI: `$FORGE/bin/forge <cmd>` (list at the bottom).
 Environments (see README): CAD venv `$FORGE/.venv-cad` (build123d, trimesh, manifold3d, usd-core, opencv, sdf; override `FORGE_CAD_PY`), optional AI venv `$FORGE/.venv-ai` (torch, diffusers, CLIP; override `FORGE_AI_PY`) for `text3d` and `looks`.
 Printer: `knowledge/printer.json` (bed, nozzle, layer; examples in `knowledge/printers/`). Slicing is the user's slicer of choice: forge ends at a verified STL plus a preflight verdict (supports on/off). An optional `slicer_cmd` hook lets forge report print time and grams.
 

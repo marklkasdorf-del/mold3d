@@ -1,4 +1,4 @@
-# max-model vs humans — 3D modeling benchmark, 2026-10-17
+# Mold3D vs humans — 3D modeling benchmark, 2026-10-17
 Author's own run (n=1 per item, one model: Claude). Treat as a worked case study, not a rigorous study. Ground-truth STEP files (from step.parts) and community champion (Printables) models are not redistributed here; re-fetch them with `forge parts-find` / the model site.
 Files: `bench/` (the blind attempt scripts; gt/ and scores/ not included). Re-run after any skill change.
 
@@ -35,7 +35,7 @@ Proof: balisong v2 widened bars -> sweep caught the handle crash at 180 deg -> p
 ## Still unproven (needs real prints)
 Gaps 0.29-0.36 never printed (neither mechanism gaps nor the Fit Card); human champions use 0.25. Print the Fit Card + the planetary before trusting any gap.
 
-## max-model 2.0 results (same day, evening)
+## Mold3D 2.0 results (same day, evening)
 - Gridfinity from memory of the spec 0.74 IoU -> after measuring a community Gridfinity 1x1x6 bin: **0.93** (lesson repeated: measure, don't recall).
 - Looks Score (CLIP on clean renders) ranked every pair like a human: balisong human 60% > v2 42% > v1 28%; planetary 98% vs 99%;
   real helmet 13.5% vs egg 0.9%. Annotated CAD views gave nonsense (14% for the human balisong) -> always clean renders.

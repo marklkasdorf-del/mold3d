@@ -1,6 +1,6 @@
-# max-model
+# Mold3D
 
-**Getting Claude Code or Codex to design 3D parts that actually work, and actually print, is famously hard. max-model fixes it with a build -> verify loop: the agent never gets to say "looks good", only to read numbers.**
+**Getting Claude Code or Codex to design 3D parts that actually work, and actually print, is famously hard. Mold3D fixes it with a build -> verify loop: the agent never gets to say "looks good", only to read numbers.**
 
 A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, auto-support traps, tip-over).
 
@@ -79,7 +79,7 @@ New render flags (`forge showcase`, Blender): `--style studio|paper` (studio = C
 
 ## Why it works
 
-LLMs write plausible CAD scripts, but they cannot see an STL, they misremember dimensions, and a boolean that silently does nothing looks identical to one that worked. max-model's answer is boring and effective:
+LLMs write plausible CAD scripts, but they cannot see an STL, they misremember dimensions, and a boolean that silently does nothing looks identical to one that worked. Mold3D's answer is boring and effective:
 
 1. **Spec first, with numbers.** `spec.md` + `spec.json` hold the success criteria (bbox, volume, wall, component count, fit).
 2. **One change per iteration.** Every iteration is saved; `forge run` rebuilds, runs `verify`, renders a 6-view annotated sheet, and writes `REPORT.md`.
@@ -151,8 +151,8 @@ Requirements: Python 3.10-3.12, [Blender](https://www.blender.org) 4.x/5.x (rend
 
 ```bash
 # 1. install as a Claude Code skill (or just clone anywhere and use bin/forge)
-git clone https://github.com/marklkasdorf-del/max-model ~/.claude/skills/max-model
-cd ~/.claude/skills/max-model
+git clone https://github.com/marklkasdorf-del/mold3d ~/.claude/skills/mold3d
+cd ~/.claude/skills/mold3d
 
 # 2. CAD environment (everything except text3d / looks)
 python3.12 -m venv .venv-cad
@@ -187,15 +187,15 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 ## Example prompts
 
 ```
-/max-model a wall mount for a 38 mm round sensor, two M3 screws, must print without supports
-/max-model print-in-place gear fidget, about 50 mm, planetary
-/max-model flexi axolotl, 120 mm long
-/max-model make me a box 80 x 60 x 40 with a sliding lid and a label that says SCREWS
-/max-model will this print? (attach bracket.stl)
-/max-model add my name to the top of this STL and a keychain loop
-/max-model this statue is 290 mm tall and my bed is 220: split it
-/max-model insert for my 72 x 24 mm multitool in a gridfinity drawer (I will photograph it on the mat)
-/max-model text to 3D: a baby dragon sitting on a plinth
+/mold3d a wall mount for a 38 mm round sensor, two M3 screws, must print without supports
+/mold3d print-in-place gear fidget, about 50 mm, planetary
+/mold3d flexi axolotl, 120 mm long
+/mold3d make me a box 80 x 60 x 40 with a sliding lid and a label that says SCREWS
+/mold3d will this print? (attach bracket.stl)
+/mold3d add my name to the top of this STL and a keychain loop
+/mold3d this statue is 290 mm tall and my bed is 220: split it
+/mold3d insert for my 72 x 24 mm multitool in a gridfinity drawer (I will photograph it on the mat)
+/mold3d text to 3D: a baby dragon sitting on a plinth
 ```
 
 ## Command reference
