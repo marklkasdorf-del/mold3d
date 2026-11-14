@@ -65,13 +65,13 @@ The gaps and the ratio are **verified in geometry, not on real plastic**: print 
 
 ```bash
 forge mech build cyclo11                                    # build + self-test + export (about 2 min)
-forge mech ratio cyclo11                                    # measured ratio + backlash -> out/cyclo11/ratio.json
+forge mech ratio cyclo11                                    # measured ratio + backlash -> mold3d/cyclo11/ratio.json
 forge mech ratio planetary --motion mesh --driven ring --driver sun      # same tool on the planetary: -1/3
 forge run examples/cyclo11/cyclo11_part.py --name cyclo11 --spec examples/cyclo11/spec.json
-forge preflight out/cyclo11/cyclo11.stl
-forge export out/cyclo11/cyclo11.stl                        # -> cyclo11_SUPPORTS-OFF.3mf: the supports decision travels with the file
-forge showcase out/cyclo11 --style studio --still hero      # also: cutaway (y=0 section), exploded
-forge showcase out/cyclo11 --motion reduce --style studio --ghost housing --annotate --elev 55
+forge preflight mold3d/cyclo11/cyclo11.stl
+forge export mold3d/cyclo11/cyclo11.stl                        # -> cyclo11_SUPPORTS-OFF.3mf: the supports decision travels with the file
+forge showcase mold3d/cyclo11 --style studio --still hero      # also: cutaway (y=0 section), exploded
+forge showcase mold3d/cyclo11 --motion reduce --style studio --ghost housing --annotate --elev 55
 ```
 
 New render flags (`forge showcase`, Blender): `--style studio|paper` (studio = Cycles + denoise, AgX, dark field with a shadow-catcher floor, graphite material, 3-light rig, 85 mm camera fitted to the part), `--accent PART[,PART]` (orange part), `--ghost PART` (12 % alpha, no shadow), `--section x|y|z=VAL` (boolean cut per part, cap faces coloured), `--explode` (offsets from `meta.explode`, with an axis line), `--still hero|cutaway|exploded`, `--annotate` (INPUT / OUTPUT angle, ratio, measured ratio and backlash burned into every frame), plus `--samples`, `--elev`, `--az`, `--fill`, `--yshift`. `forge mech ratio` exits 3 when the measured ratio differs from the declared one by more than 0.5 % (`--declared N` overrides the declared value).
@@ -237,7 +237,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 | command | usage |
 |---|---|
 | `doctor` | check Blender, OpenSCAD, venvs, optional models, printer profile |
-| `run` | `forge run part.py [--lane b123d\|scad\|bpy] [--spec spec.json] [--name N] [--section z=5] [--ref img] [--eevee] [--no-render]` -> `out/<name>/` with STL, sheet, verify.json, REPORT.md, `iter_NN/` |
+| `run` | `forge run part.py [--lane b123d\|scad\|bpy] [--spec spec.json] [--name N] [--section z=5] [--ref img] [--eevee] [--no-render]` -> `mold3d/<name>/` with STL, sheet, verify.json, REPORT.md, `iter_NN/` |
 | `verify` | `bin/verify model.stl [--spec spec.json]`, `--orient` (rank the 6 lay-down orientations), `--assembly a.stl b.stl --clearance 0.3 --move-b=x,y,z` |
 | `preflight` | `forge preflight model.stl [--slice] [--orient] [--heat] [--json out.json]` verdict + supports decision |
 | `export` | `forge export model.stl [--supports on\|off\|auto] [--out file.3mf]` 3MF that carries the supports decision (Orca/Bambu/AnkerMake `enable_support`, PrusaSlicer `support_material`); default name ends `_SUPPORTS-OFF` / `_SUPPORTS-ON`; auto = the preflight verdict |
@@ -314,7 +314,7 @@ Small, focused PRs welcome. House rules, in the spirit of the skill itself:
 - Moving-part code must come with a self-test: sweep clear, must-jam control along its path, measured gaps.
 - No weights, no scraped transcripts, no personal data, no absolute paths. Use `forge_env`/`printer` for locations and bed size.
 - Run `bash tests/run_suite.sh` (and `tests/run_all.sh` if you have Blender/OpenSCAD) before opening a PR; add a line to `knowledge/lessons.md` for anything that cost you an hour.
-- Bug reports: include `forge doctor` output and the `out/<name>/build.log`.
+- Bug reports: include `forge doctor` output and the `mold3d/<name>/build.log`.
 
 ## Credits and licenses
 - Code: MIT, see [LICENSE](LICENSE).
