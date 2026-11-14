@@ -19,6 +19,7 @@ lib/text3d/Hunyuan3D-2/
 *.bin
 # per-user calibration (yours, not the repo's)
 knowledge/fit.json
+knowledge/printer.json
 # OS / editor
 .DS_Store
 .claude/

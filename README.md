@@ -1,8 +1,20 @@
 # Mold3D
 
-**Getting Claude Code or Codex to design 3D parts that actually work, and actually print, is famously hard. Mold3D fixes it with a build -> verify loop: the agent never gets to say "looks good", only to read numbers.**
+**AI that designs 3D prints that actually work, and proves it before you hit print.**
 
-A [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, auto-support traps, tip-over).
+- **Design a part from a sentence.** "A wall mount for a 38 mm sensor", "a print-in-place gear fidget", "a box with a sliding lid".
+- **Catches print failures before you waste plastic.** Checks your part layer by layer for floating pieces, gaps that fuse shut, supports that weld moving parts together, and parts that tip over.
+- **Print-in-place mechanisms that come off the bed already moving.** Gears, hinges, gearboxes, checked through their full range of motion first.
+- **Works in Claude Code and Codex.** Free, MIT licensed, runs on your machine.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
+```
+
+Then in Claude Code: `/mold3d <what you want>`
+
+### How it works
+Mold3D is a [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, auto-support traps, tip-over).
 
 ## Showpiece: CYCLO-11, a print-in-place cycloidal speed reducer
 
@@ -143,9 +155,19 @@ Fully specified parts come out near human-with-calipers quality (~0.96); every g
 - Threads and complex linkages (> 5 moving parts) are unreliable.
 
 ### What is not proven yet
-Every print-in-place gap in the benchmark (0.29-0.36 mm) is **verified in geometry, not on real plastic**. Community champions use 0.25 mm. The skill's first print is the **Fit Card** (`forge mech build fitcard`, about an hour, ~16 g): it measures your printer's real gaps, and `forge fit set` writes them into the one table all generators read. Until that is done, every print-in-place design carries a preflight CAUTION by design. The images above are renders.
+Most print-in-place gaps in the benchmark (0.29-0.36 mm) are **verified in geometry, not on real plastic**, and CYCLO-11 itself has not been printed yet. The first real result is the **Fit Card** (`forge mech build fitcard`, about an hour, ~16 g), which measures your printer's real gaps; `forge fit set` writes them into the one table all generators read. On 2026-11-13 it was printed on an Anker M5C (stock profile, PLA, supports off): spinners at 0.20 mm and wider broke free, 0.15 mm fused; hinges at 0.35 mm and wider folded, 0.25 mm fused. So `pip_gap` 0.20 / `pip_vgap` 0.35 on that printer. That is one printer; the shipped default stays as is until you calibrate yours, and until then every print-in-place design carries a preflight CAUTION by design. The images above are renders.
 
 ## Quickstart
+
+**One command** (macOS or Linux, no sudo; installs into `~/.claude/skills/mold3d`, links it for Codex if you have `~/.codex`, asks which printer you have, and runs a self-test; re-run it any time to upgrade):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
+```
+
+It uses [uv](https://docs.astral.sh/uv/) if you have it, otherwise Python 3.10-3.12 on your PATH. Options: `MOLD3D_DIR`, `MOLD3D_PRINTER=prusa-mk4` (skip the menu), `MOLD3D_REF` (branch).
+
+### Manual install
 
 Requirements: Python 3.10-3.12, [Blender](https://www.blender.org) 4.x/5.x (renders and showcase videos; optional but strongly recommended), OpenSCAD (optional, scad lane), ffmpeg (optional, showcase). macOS (Apple silicon) is what it was built on; Linux should work; Windows is untested.
 
