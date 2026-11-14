@@ -46,11 +46,11 @@ No `$FORGE/.venv-cad`? Run `bash $FORGE/install.sh` first. Run `forge doctor` on
 | show off / sell | SHOWCASE + AR | `forge showcase`, `forge ar` |
 
 ## Fast lane vs custom lane
-**Fast lane** (REMIX, MAKE, MECHKIT, GRIDFINITY, PLATE, SPLIT): build now with stated defaults, finish with the Print Report, then ask "want it different?". Ask first only if the Questionnaire says a fit number is missing.
+**Fast lane** (REMIX, MAKE, MECHKIT, GRIDFINITY, PLATE, SPLIT): build now with stated defaults, finish with the Print Report, then ask "want it different?". Missing fit numbers: draft with defaults first, then ask (see Questionnaire).
 **Custom lane** (MODEL): follow phases 1-5.
 
 ## Questionnaire (vague requests)
-If the request lacks a number the part depends on (what it attaches to, size, screw size, device model): look it up first (`parts-find`, `knowledge/devices.json`, datasheet, `photofit`). What is still missing: ask 1-3 multiple-choice questions, each with smart defaults ("M3", "standard <device> size (I'll look it up)", "I'll measure it"; the user can type Other). In Claude Code use the AskUserQuestion tool; in Codex or when it is unavailable, send a short numbered list with defaults marked. Ask only about numbers that change whether it FITS or WORKS, never color, fillets or other safe defaults. If the user says "just make it", proceed with defaults, list them under `"assumed"` in `spec.json`, and the Print Report shows an Assumed row. Format and examples: `reference/questions.md`.
+**Draft first, then ask:** for a vague request, build a quick rough draft with sensible defaults and show it (first render + one line on what you assumed), THEN ask. If the request lacks a number the part depends on (what it attaches to, size, screw size, device model): look it up first (`parts-find`, `knowledge/devices.json`, datasheet, `photofit`). What is still missing: ask 1-3 multiple-choice questions, each with smart defaults ("M3", "standard <device> size (I'll look it up)", "I'll measure it"; the user can type Other). In Claude Code use the AskUserQuestion tool; in Codex or when it is unavailable, send a short numbered list with defaults marked. Ask only about numbers that change whether it FITS or WORKS, never color, fillets or other safe defaults. If the user says "just make it", proceed with defaults, list them under `"assumed"` in `spec.json`, and the Print Report shows an Assumed row. Format and examples: `reference/questions.md`.
 
 ## Phase 1: BRIEF (custom parts)
 1. Collect what the user already told you (device model, measurements, photos).
