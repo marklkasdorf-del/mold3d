@@ -27,6 +27,8 @@ AI_PY = os.environ.get("FORGE_AI_PY") or _venv_py(".venv-ai") or CAD_PY
 
 
 def find_blender():
+    if os.environ.get("BLENDER", "").lower() in ("none", "off", "0"):
+        return None   # explicit opt-out (also used to test the no-Blender path)
     for c in (os.environ.get("BLENDER"), shutil.which("blender"),
               "/Applications/Blender.app/Contents/MacOS/Blender", "/usr/bin/blender",
               "C:/Program Files/Blender Foundation/Blender/blender.exe"):

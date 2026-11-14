@@ -11,6 +11,12 @@
 curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
 ```
 
+**Or let your AI do it.** Paste this into Claude Code or Codex:
+
+```
+Install Mold3D for me: run `curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash`, pick my printer if it asks, then tell me what it printed at the end.
+```
+
 Then in Claude Code: `/mold3d <what you want>`
 
 ### How it works

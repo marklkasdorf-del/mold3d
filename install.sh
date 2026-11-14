@@ -3,6 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
 # Env: MOLD3D_DIR (default ~/.claude/skills/mold3d)  MOLD3D_REPO  MOLD3D_REF (branch)
 #      MOLD3D_PRINTER=<profile basename, e.g. prusa-mk4>  MOLD3D_NO_CODEX=1 (skip ~/.codex link)
+#      MOLD3D_NO_AUTO_UV=1 (never auto-install uv; fail with manual instructions instead)
 set -euo pipefail
 
 REPO="${MOLD3D_REPO:-https://github.com/marklkasdorf-del/mold3d}"
@@ -55,17 +56,41 @@ PY=".venv-cad/bin/python"
 if [ -x "$PY" ] && "$PY" -c 'import build123d, trimesh, manifold3d' 2>/dev/null; then
   ok "already installed (re-run with: rm -rf $DIR/.venv-cad to rebuild)"
 else
-  if command -v uv >/dev/null; then
-    uv venv -q --allow-existing --python 3.12 .venv-cad
-    uv pip install -q --python "$PY" -r requirements-cad.txt
+  # Resolve a Python toolchain: uv (PATH or user-level dirs) > python3.10-3.12 > auto-install uv.
+  UV=""
+  if command -v uv >/dev/null; then UV="uv"
   else
-    BASEPY=""
+    for c in "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv"; do
+      [ -x "$c" ] && { UV="$c"; break; }
+    done
+  fi
+  BASEPY=""
+  if [ -z "$UV" ]; then
     for c in python3.12 python3.11 python3.10; do
       command -v "$c" >/dev/null && { BASEPY="$c"; break; }
     done
-    if [ -z "$BASEPY" ]; then
+  fi
+  if [ -z "$UV" ] && [ -z "$BASEPY" ]; then
+    if [ -n "${MOLD3D_NO_AUTO_UV:-}" ]; then
       die "Need Python 3.10-3.12 or uv. Easiest fix (no sudo): curl -LsSf https://astral.sh/uv/install.sh | sh   then re-run this installer."
     fi
+    say "Installing uv (Python tool manager, user-level, no password)..."
+    command -v curl >/dev/null || die "curl is required to install uv. Install uv or Python 3.12 yourself, then re-run (see https://docs.astral.sh/uv/)."
+    # UV_NO_MODIFY_PATH=1 keeps uv from editing your shell profiles; we call it by absolute path.
+    if ! curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh; then
+      die "Could not install uv (network blocked or astral.sh unreachable?). Check your connection/proxy and re-run, or install Python 3.12 yourself, or see https://docs.astral.sh/uv/getting-started/installation/"
+    fi
+    for c in "${XDG_BIN_HOME:+$XDG_BIN_HOME/uv}" "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv"; do
+      [ -n "$c" ] && [ -x "$c" ] && { UV="$c"; break; }
+    done
+    [ -n "$UV" ] || die "uv installed but not found at ~/.local/bin/uv. Open a new terminal and re-run this installer."
+    ok "uv installed ($UV)"
+  fi
+  if [ -n "$UV" ]; then
+    # uv fetches a managed Python 3.12 if none is present; force downloads on even if the user disabled them.
+    UV_PYTHON_DOWNLOADS=automatic "$UV" venv -q --allow-existing --python 3.12 .venv-cad
+    UV_PYTHON_DOWNLOADS=automatic "$UV" pip install -q --python "$PY" -r requirements-cad.txt
+  else
     "$BASEPY" -m venv .venv-cad
     "$PY" -m pip install -q --upgrade pip
     "$PY" -m pip install -q -r requirements-cad.txt
@@ -73,7 +98,7 @@ else
   ok "CAD packages installed"
 fi
 if ! "$PY" -c 'import sdf' 2>/dev/null; then
-  if command -v uv >/dev/null; then uv pip install -q --python "$PY" git+https://github.com/fogleman/sdf.git
+  if [ -n "${UV:-}" ]; then "$UV" pip install -q --python "$PY" git+https://github.com/fogleman/sdf.git
   else "$PY" -m pip install -q git+https://github.com/fogleman/sdf.git; fi \
     && ok "SDF organic lane installed" \
     || warn "SDF lane failed to install (organic shapes disabled; everything else works)"
@@ -115,7 +140,11 @@ opt ffmpeg "showcase video / GIF output"
 
 # 6. Verify
 step "5/5 Checking it works"
-bin/forge doctor 2>&1 | tail -15 || true
+# Doctor is advisory: show required-dependency problems only, summarise optional extras, never abort here.
+DOC="$("$DIR/bin/forge" doctor 2>&1 || true)"
+printf '%s\n' "$DOC" | grep -A1 '\[MISSING\]' || true
+NOPT="$(printf '%s\n' "$DOC" | grep -c '\[optional\]' || true)"
+[ "${NOPT:-0}" -gt 0 ] && say "  ($NOPT optional extras not installed; see: $DIR/bin/forge doctor)"
 SMOKE="$(mktemp -d "${TMPDIR:-/tmp}/mold3d.XXXXXX")"
 trap 'rm -rf "$SMOKE"' EXIT
 if "$DIR/bin/forge" mech build fitcard --out "$SMOKE/fitcard" >"$SMOKE/log" 2>&1; then

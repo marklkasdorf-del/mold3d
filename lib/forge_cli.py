@@ -139,12 +139,12 @@ def cmd_doctor(a):
     pr = printer.load()
     print(f"  [info] printer: {pr['name']}  bed {pr['bed']}  nozzle {pr['nozzle']}  (knowledge/printer.json)")
     bl = forge_env.find_blender()
-    chk("Blender (renders, showcase, heatmaps)", bl, "install Blender 4.x/5.x (https://www.blender.org) or set BLENDER=/path/to/blender")
+    chk("Blender (renders, showcase, heatmaps)", bl, "optional: install Blender 4.x/5.x (https://www.blender.org) or set BLENDER=/path/to/blender. Core CAD/verify/preflight works without it", required=False)
     if bl:
         p = subprocess.run([bl, "-b", "--python-expr", "import bpy;print('BLV',bpy.app.version_string)"], capture_output=True, text=True)
         good = "BLV" in p.stdout
         chk("Blender runs headless" + (" (" + p.stdout.split("BLV")[1].split()[0] + ")" if good else f" (exit {p.returncode})"), good,
-            "exit 139/-11 usually means an agent sandbox is hiding the GPU: run this command outside the sandbox" if p.returncode in (139, -11, -6, 134) else "run Blender manually once; check OS security prompts")
+            "exit 139/-11 usually means an agent sandbox is hiding the GPU: run this command outside the sandbox" if p.returncode in (139, -11, -6, 134) else "run Blender manually once; check OS security prompts", required=False)
     chk("openscad (only for the scad lane)", forge_env.find_openscad(), "install OpenSCAD 2021+ (a Manifold-backend nightly is best) or set OPENSCAD=...", required=False)
     chk(f"CAD python: {CAD_PY}", os.path.exists(CAD_PY), "python3.12 -m venv .venv-cad && .venv-cad/bin/pip install -r requirements-cad.txt")
     if os.path.exists(CAD_PY):

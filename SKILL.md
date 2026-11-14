@@ -50,6 +50,9 @@ Printer: `knowledge/printer.json` (bed, nozzle, layer; examples in `knowledge/pr
 7. **Report milestones briefly** (route chosen, first render, print-ready with time/grams/verdict, blocker): one line each, say what the user must decide. Send key images (sheet.png, poster.png) and AR files when the channel supports files.
 8. Never start a print or spend money without the user's explicit OK. Downloaded models: respect the license (CC BY-NC = no selling).
 
+## First use
+If `$FORGE/.venv-cad` is missing (for example the repo was cloned by hand), run `bash $FORGE/install.sh` first, before anything else.
+
 ## Session start (30 seconds)
 ```
 ls $FORGE/knowledge/; cat $FORGE/knowledge/{fit-log.md,lessons.md,printer.json}; $FORGE/bin/forge fit show
