@@ -40,7 +40,7 @@ def plain(i):
     if c == "overhang":
         return "steep overhangs need supports"
     if c == "walls":
-        return ("walls too thin to print reliably in places" if "1.2" in m else "some walls are thin and may feel fragile")
+        return ("walls too thin to print reliably in places" if i.get("kind") == "unprintable" or "1.2" in m else "some walls are thin and may feel fragile")
     if c == "pip":
         return ("moving parts are too close together and will fuse" if lv == "NO-GO"
                 else "tight gap near the bed may fuse")
@@ -218,7 +218,8 @@ def gather(a):
     rep = {"name": name, "generated": datetime.datetime.now().isoformat(timespec="seconds"),
            "printer": pr.get("name"), "bbox_mm": R.get("bbox_mm"), "volume_cm3": R.get("volume_cm3"),
            "preflight": {"verdict": R["verdict"], "supports": R["supports"], "supports_text": R.get("supports_text"),
-                         "issues": [{k: i.get(k) for k in ("level", "code", "msg", "fix")} for i in R.get("issues", [])],
+                         "issues": [{k: i.get(k) for k in ("level", "code", "msg", "fix", "kind") if k in i} for i in R.get("issues", [])],
+                         "limits": R.get("limits"),
                          "notes": R.get("notes", []), "source": how}}
     rep["watch_for"] = top_issues(R.get("issues", []))
     spec = read_spec(out_dir, stl)

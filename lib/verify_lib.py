@@ -14,8 +14,12 @@ PLA_G_CM3 = 1.24
 try:
     import printer
     DEFAULT_BED = list(printer.bed())      # knowledge/printer.json
+    _LIM = printer.limits()
 except Exception:
     DEFAULT_BED = [220.0, 220.0, 250.0]
+    _LIM = {"overhang_deg": 45.0, "min_wall_mm": 1.2}
+OVERHANG_DEG = _LIM["overhang_deg"]        # printer profile, with a source line (forge printer)
+MIN_WALL_MM = _LIM["min_wall_mm"]
 
 
 def row(name, status, value, detail=""):
@@ -164,7 +168,8 @@ def wall_thickness(mesh, min_wall, seed=0):
     return total
 
 
-def overhang(mesh, zmin, angle=45.0):
+def overhang(mesh, zmin, angle=None):
+    angle = OVERHANG_DEG if angle is None else angle
     """Downward faces flatter than `angle` from horizontal, excluding faces on the bed plane."""
     nz = mesh.face_normals[:, 2]
     low = mesh.triangles[:, :, 2].max(axis=1) <= zmin + 0.05
@@ -241,16 +246,16 @@ def verify(path, spec=None, spec_dir=None):
     info["overhang_area_mm2"] = round(oh_area, 1); info["support_pct"] = round(pct, 1); info["overhang_levels"] = levels
     lim = spec.get("max_support_pct")
     st = "PASS" if pct <= (lim if lim is not None else 10) else ("FAIL" if lim is not None else "WARN")
-    rows.append(row("supports", st, round(pct, 1), f"{oh_area:.0f} mm2 of surface is >45deg overhang (limit {lim if lim is not None else '10 (soft)'}%); worst z-levels {levels}"))
+    rows.append(row("supports", st, round(pct, 1), f"{oh_area:.0f} mm2 of surface is >{OVERHANG_DEG:g}deg overhang (limit {lim if lim is not None else '10 (soft)'}%); worst z-levels {levels}"))
     # --- walls
     mw = spec.get("min_wall_mm")
-    tw = wall_thickness(m, mw if mw is not None else 1.2)
+    tw = wall_thickness(m, mw if mw is not None else MIN_WALL_MM)
     info["wall"] = tw
     thin_bad = tw["thin_area_mm2"] >= 1.0
     st = "PASS" if not thin_bad else ("FAIL" if mw is not None else "WARN")
     detail = (f"min seen {tw['min_mm']:.2f} mm, p05 {tw['p05_mm']:.2f} mm" if tw["min_mm"] is not None else "no inward hits") + (f", measured per body x{tw['bodies']}" if tw["bodies"] > 1 else "")
     if thin_bad:
-        detail += f"; ~{tw['thin_area_mm2']:.0f} mm2 below {mw if mw is not None else 1.2} mm at " + "; ".join(
+        detail += f"; ~{tw['thin_area_mm2']:.0f} mm2 below {mw if mw is not None else MIN_WALL_MM} mm at " + "; ".join(
             f"{c['center_mm']} ({c['min_thickness_mm']}mm)" for c in tw["clusters"][:4])
     rows.append(row("min_wall", st, None if tw["min_mm"] is None else round(tw["min_mm"], 2), detail))
     # --- spec asserts
@@ -437,7 +442,7 @@ def plain_rows(rows, spec):
             p = f"Overhangs: {v:g}% of the surface needs support" + (f" (limit {lim:g})" if lim is not None else " (soft limit 10)")
         elif n == "min_wall":
             mw = spec.get("min_wall_mm")
-            p = (f"Thinnest wall {v:.2f} mm" if v is not None else "No thin walls found") + (f" (minimum {mw:g})" if mw is not None else " (1.2 is the printable minimum)")
+            p = (f"Thinnest wall {v:.2f} mm" if v is not None else "No thin walls found") + (f" (minimum {mw:g})" if mw is not None else f" ({MIN_WALL_MM:g} is the printable minimum)")
             if st != "PASS":
                 p += ": thin spots at " + "; ".join(x.strip() for x in d.split(" at ", 1)[1:]) if " at " in d else ": too thin in places"
         elif n == "spec_bbox":
@@ -457,7 +462,8 @@ def plain_rows(rows, spec):
 
 
 # ---------------------------------------------------------------- print orientation candidates
-def orientations(path, bed=None, angle=45.0):
+def orientations(path, bed=None, angle=None):
+    angle = OVERHANG_DEG if angle is None else angle
     """Rank the 6 axis-aligned ways to lay the part on the bed (idea from text-to-cad dfam-check `orientations`).
     Per candidate: overhang/support area (mm2 and % of surface), bed-contact patch, build height, bed fit.
     Recommendation = fits the bed, least support area, then biggest contact patch, then lowest height."""

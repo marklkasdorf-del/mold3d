@@ -1,1 +1,32 @@
-{"name": "Bambu Lab X1/P1/A1-class (256 mm cube)", "bed": [256, 256, 256], "nozzle": 0.4, "layer": 0.2, "material": "PLA", "slicer_cmd": "", "support_angle": 30, "support_trap_gap": 2.0}
+{
+ "name": "Bambu Lab X1/P1/A1-class (256 mm cube)",
+ "bed": [
+  256,
+  256,
+  256
+ ],
+ "nozzle": 0.4,
+ "layer": 0.2,
+ "material": "PLA",
+ "slicer_cmd": "",
+ "support_angle": 30,
+ "support_trap_gap": 2.0,
+ "bridge_mm": 18,
+ "overhang_deg": 45,
+ "min_wall_mm": 1.2,
+ "first_layer_fuse_mm": 0.35,
+ "sources": {
+  "bed": "UNVERIFIED here: 256 x 256 x 256 mm is Bambu Lab's nominal build volume for the X1/P1 series as listed when this profile was written; the A1 differs in Z, check the spec page.",
+  "nozzle": "UNVERIFIED: 0.4 mm standard nozzle as listed when this profile was written.",
+  "layer": "UNVERIFIED: 0.20 mm is the usual stock-profile layer height. Edit if your profile differs.",
+  "support_angle": "OrcaSlicer support_threshold_angle default = 30 deg (src/libslic3r/PrintConfig.cpp). Your slicer's own default is UNVERIFIED unless noted.",
+  "support_trap_gap": "Mold3D house value [R]: the gap an auto support would fill and weld; suite fixtures 0.3 mm fires, 5 mm does not. Not measured on this printer.",
+  "bridge_mm": "Mold3D house value [R] from the 2026-10 bench fixtures (10 mm bridge GO, 30 mm needs supports). OrcaSlicer's max_bridge_length default is 10 mm (PrintConfig.cpp). Not measured on this printer.",
+  "overhang_deg": "Prusa Knowledge Base, 'Modeling with 3D printing in mind': overhangs of 45 to 60 deg print cleanly depending on nozzle and settings (https://help.prusa3d.com/article/modeling-with-3d-printing-in-mind_164135). 45 is the safe end.",
+  "min_wall_mm": "3 perimeters at a 0.4 mm nozzle [R]. Prusa KB (same article): walls thinner than one perimeter (~0.45 mm) are not printable. 1.2 mm is the house minimum that survives handling.",
+  "first_layer_fuse_mm": "Mold3D house value [R] for first-layer gaps that elephant foot welds. Not measured on this printer.",
+  "overhang_area_mm2": "Mold3D house value [R]: the suite's 10 x 10 mm roof (100 mm2) prints without supports, a 30 x 10 mm one (300 mm2) does not. Not measured on this printer."
+ },
+ "notes": "Measured print-in-place gaps live in knowledge/fit-table.md; adopt them with `forge fit set`.",
+ "overhang_area_mm2": 120
+}

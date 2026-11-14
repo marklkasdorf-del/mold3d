@@ -15,7 +15,7 @@ def main():
     ap.add_argument("stl", nargs="?")
     ap.add_argument("--spec")
     ap.add_argument("--orient", metavar="STL", help="rank the 6 axis-aligned print orientations (support area, bed contact, height)")
-    ap.add_argument("--angle", type=float, default=45.0, help="overhang limit used by --orient")
+    ap.add_argument("--angle", type=float, default=None, help="overhang limit used by --orient (default: the printer profile's overhang_deg)")
     ap.add_argument("--assembly", nargs=2, metavar=("A", "B"))
     ap.add_argument("--clearance", type=float, default=0.2)
     ap.add_argument("--move-a", type=vec, default=(0, 0, 0), help="translate A (mm) into assembled pose, e.g. 0,0,0")

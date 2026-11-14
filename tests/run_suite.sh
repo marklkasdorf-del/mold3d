@@ -231,4 +231,33 @@ echo '{"bbox_mm": [40,40,10], "components": 1, "min_wall_mm": 2.0}' > "$N/spec.j
 "$CAD" report.py "$N/block.stl" --no-preview --no-export --fresh > "$N/rep2.log" 2>&1; rc=$?
 grep -q "^| Checks | ✅ 10 of 10 green |" "$N/rep2.log" && [ $rc = 0 ] && ok "report: the 3-line fast-lane spec -> 'Checks: 10 of 10 green', exit 0" || no "report fast lane" "rc=$rc $(grep Checks "$N/rep2.log")"
 
+# 11 per-printer thresholds: preflight judges against the profile, not constants. Same STL, different profile, different verdict.
+P="$T/printers"; rm -rf "$P"; mkdir -p "$P"
+echo '{"name": "long-bridge test", "bridge_mm": 40, "sources": {"bridge_mm": "test fixture"}}' > "$P/br40.json"
+echo '{"name": "short-bridge test", "bridge_mm": 5, "overhang_area_mm2": 50, "sources": {"bridge_mm": "test fixture"}}' > "$P/br5.json"
+v1=$(FORGE_PRINTER="$P/br40.json" "$CAD" preflight.py "$T/bridge30.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
+v2=$(FORGE_PRINTER="$P/br5.json" "$CAD" preflight.py "$T/bridge10.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
+[ "$v1" = "GO" ] && [ "$v2" = "GO+SUPPORTS" ] && ok "preflight reads bridge_mm / overhang_area_mm2 from the printer profile (30 mm bridge: GO at 40; 10 mm bridge: GO+SUPPORTS at 5 mm / 50 mm2)" || no "profile bridge_mm" "bridge30@40=$v1 bridge10@5=$v2"
+"$CAD" - "$T" <<'PY'
+import sys; sys.path.insert(0, '.'); import meshkit as mk
+mk.save(mk.box(0, 0, 0, 250, 20, 10), sys.argv[1] + '/bar250.stl')
+PY
+v1=$("$CAD" preflight.py "$T/bar250.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
+v2=$(FORGE_PRINTER="$F/knowledge/printers/anycubic-kobra-x.json" "$CAD" preflight.py "$T/bar250.stl" --json "$P/kobra.json" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
+[ "$v1" = "NO-GO" ] && [ "$v2" = "GO" ] && "$CAD" -c "import json,sys;r=json.load(open('$P/kobra.json'));sys.exit(0 if r['limits']['bed']==[260,260,260] and r['printer']=='Anycubic Kobra X' else 1)" \
+  && ok "a 250 mm bar: NO-GO on the generic 220 bed, GO on the Anycubic Kobra X (260 cube); preflight.json records the limits + printer" || no "kobra x bed" "generic=$v1 kobra=$v2"
+"$CAD" - <<'PY' && ok "every profile in knowledge/printers has a source line for the bed and all 7 thresholds; forge printer prints them" || no "profile sources" "a profile lacks a source"
+import glob, json, os, sys; sys.path.insert(0, '.'); import printer
+for f in glob.glob(os.path.join(printer.PROFILES_DIR, '*.json')):
+    d = json.load(open(f)); src = d.get('sources', {})
+    for k in ('bed',) + printer.THRESHOLDS:
+        assert k in d and k in src and len(src[k]) > 20, (os.path.basename(f), k)
+assert len(glob.glob(os.path.join(printer.PROFILES_DIR, '*.json'))) >= 4
+PY
+out=$(FORGE_PRINTER="$P/active.json" "$CAD" printer.py use anycubic-kobra-x 2>&1); FORGE_PRINTER="$P/active.json" "$CAD" printer.py > "$P/show.txt" 2>&1
+echo "$out" | grep -q "now using Anycubic Kobra X" && grep -q "bed 260 x 260 x 260" "$P/show.txt" && grep -c "UNVERIFIED\|http\|PrintConfig\|house value" "$P/show.txt" | python3 -c "import sys;sys.exit(0 if int(sys.stdin.read())>=6 else 1)" \
+  && ok "forge printer use anycubic-kobra-x -> active profile; forge printer shows every threshold with its source" || no "forge printer" "$out $(cat "$P/show.txt")"
+echo '{"name": "edited by hand", "bridge_mm": 25}' > "$P/noscr.json"
+FORGE_PRINTER="$P/noscr.json" "$CAD" printer.py | grep -q "bridge_mm  *25 mm  *UNVERIFIED: set in this profile without a source line" && ok "a threshold edited without a source line shows as UNVERIFIED, never credited to the generic source" || no "unverified edit" "$(FORGE_PRINTER="$P/noscr.json" "$CAD" printer.py | grep bridge)"
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

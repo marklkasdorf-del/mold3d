@@ -153,7 +153,7 @@ def _doctor_body():
     print("forge doctor")
     print(f"  [info] FORGE_ROOT={FORGE}")
     pr = printer.load()
-    print(f"  [info] printer: {pr['name']}  bed {pr['bed']}  nozzle {pr['nozzle']}  (knowledge/printer.json)")
+    print(f"  [info] printer: {pr['name']}  bed {pr['bed']}  nozzle {pr['nozzle']}  (forge printer: thresholds + sources)")
     bl = forge_env.find_blender()
     chk("Blender (renders, showcase, heatmaps)", bl, "install Blender 4.x/5.x (https://www.blender.org) or set BLENDER=/path/to/blender", required=False,
         off="Renders, previews and heatmaps are off (Blender isn't installed). Everything else works.")
@@ -345,6 +345,7 @@ COMMANDS = [
     ]),
     ("Setup", [
         ("doctor", "[--fresh]: check the install (result cached for 24 h)"),
+        ("printer", "[list | use <name>]: the active printer profile, every threshold with its source"),
     ]),
 ]
 
@@ -366,6 +367,7 @@ ALL_CMDS = [n for _, cs in COMMANDS for n, _ in cs]
 NEW = {
     "mech": cmd_mech,
     "fit": lambda r: _cad("fit.py", r or ["show"]),
+    "printer": lambda r: _cad("printer.py", r or ["show"]),
     "flexify": lambda r: _cad("flexify.py", r),
     "preflight": lambda r: _cad("preflight.py", r),
     "verify": lambda r: _cad("verify_cli.py", r),

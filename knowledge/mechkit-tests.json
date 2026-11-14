@@ -1,5 +1,5 @@
 {
- "date": "2026-11-13T20:06",
+ "date": "2026-11-14T17:00",
  "results": {
   "fitcard": {
    "ok": true,
@@ -51,7 +51,7 @@
      true
     ]
    ],
-   "seconds": 69.9
+   "seconds": 57.9
   },
   "gyro": {
    "ok": true,
@@ -83,7 +83,7 @@
      null
     ]
    ],
-   "seconds": 41.3
+   "seconds": 40.4
   },
   "balisong": {
    "ok": true,
@@ -95,7 +95,7 @@
      true
     ]
    ],
-   "seconds": 3.4
+   "seconds": 3.3
   },
   "helix": {
    "ok": true,
@@ -107,7 +107,7 @@
      true
     ]
    ],
-   "seconds": 35.1
+   "seconds": 31.6
   },
   "cycloidal": {
    "ok": true,
@@ -129,7 +129,7 @@
      true
     ]
    ],
-   "seconds": 94.3
+   "seconds": 91.0
   }
  }
 }

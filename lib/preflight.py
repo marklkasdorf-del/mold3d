@@ -7,12 +7,15 @@ Checks (each one is a real failure seen while building and benchmarking this ski
   contact    bed contact area + shape; knife-edge patch = peels (a helmet print once died on a 9x1 mm sliver)
   tip        centre of mass vs contact hull; tall + narrow = wobble/knock-over
   islands    a region that STARTS IN MID-AIR (no layer under it) = spaghetti unless supported
-  overhang   area past 45 deg per layer; unsupported spans anchored on 2+ sides and < 18 mm = OK bridge
-  walls      walls < 1.2 mm (won't print) and < 2.0 mm; per layer, opening by offset
-  pip        print-in-place: separate bodies closer than fit.pip_gap; first-layer gaps < 0.35 mm fuse (elephant foot)
-  traps      AUTO-SUPPORT TRAPS: flat-ish undersides (slope from horizontal < support_angle, default 30) that sit < 2 mm over a
+  overhang   area past overhang_deg per layer; unsupported spans anchored on 2+ sides and < bridge_mm = OK bridge; more than
+             overhang_area_mm2 of the rest = supports
+  walls      walls < min_wall_mm (won't print) and < fit.min_wall (house minimum); per layer, opening by offset
+  pip        print-in-place: separate bodies closer than fit.pip_gap; first-layer gaps < first_layer_fuse_mm fuse (elephant foot)
+  traps      AUTO-SUPPORT TRAPS: flat-ish undersides (slope from horizontal < support_angle) that sit < support_trap_gap over a
              DIFFERENT body; a slicer's "auto supports" would fill that gap and weld the parts (CYCLO-11's first print died of this)
-  bed        fits the printer bed (knowledge/printer.json)
+  bed        fits the printer bed
+Every threshold (bridge_mm, overhang_deg, min_wall_mm, first_layer_fuse_mm, support_angle, support_trap_gap, layer, bed) comes from the
+printer profile (knowledge/printer.json; `forge printer` shows each with its source) and is written to the JSON under "limits".
 Verdict: GO / CAUTION / GO+SUPPORTS (prints fine with the supports box ticked) / NO-GO (no checkbox saves it),
 with plain-English reasons + fixes (geometry, orientation, supports on/off; never slicer tuning).
 Traps => the report says "SUPPORTS: OFF (required)"; `forge export model.stl` carries that into a 3MF the slicer obeys.
@@ -26,9 +29,7 @@ import meshkit as mk
 import fit
 from manifold3d import CrossSection, JoinType
 
-LAYER = 0.2
 import printer
-BED = printer.bed()
 
 
 def _polys(cs):
@@ -111,6 +112,10 @@ def support_traps(t, angle=None, max_gap=None, samples_per_mm2=1.0, cap=30000):
 
 
 def analyse(path, do_slice=False, allow_tight=False):
+    LIM = printer.limits()
+    LAYER = LIM["layer"]; BED = LIM["bed"]
+    BRIDGE, OVERHANG, MINWALL, FUSE, OH_AREA = LIM["bridge_mm"], LIM["overhang_deg"], LIM["min_wall_mm"], LIM["first_layer_fuse_mm"], LIM["overhang_area_mm2"]
+    HOUSE_WALL = fit.get("min_wall")                       # the recommended wall for generated parts (fit table), 2.0 by default
     M = mk.load_manifold(path)
     lo = M.bounding_box()
     x0, y0, z0, x1, y1, z1 = lo
@@ -118,7 +123,7 @@ def analyse(path, do_slice=False, allow_tight=False):
         M = M.translate([0, 0, -z0]); z1 -= z0; z0 = 0.0
     t = mk.mf2tm(M)
     R = {"file": os.path.basename(path), "bbox_mm": [round(x1 - x0, 1), round(y1 - y0, 1), round(z1, 1)],
-         "volume_cm3": round(M.volume() / 1000, 2), "issues": [], "notes": []}
+         "volume_cm3": round(M.volume() / 1000, 2), "issues": [], "notes": [], "limits": LIM, "printer": printer.load().get("name")}
 
     def issue(level, code, msg, fix=None, **kw):
         R["issues"].append({"level": level, "code": code, "msg": msg, "fix": fix, **kw})
@@ -168,7 +173,7 @@ def analyse(path, do_slice=False, allow_tight=False):
         R["notes"].append(f"tip check skipped: {e!r}"[:120])
 
     # ---- islands + overhangs (layer by layer)
-    allow = LAYER * math.tan(math.radians(45))
+    allow = LAYER * math.tan(math.radians(OVERHANG))       # how far a layer may step out over the one below
     floating, over_area, bridges, worst = [], 0.0, [], []
     for k in range(1, len(layers)):
         cur, prev = layers[k], layers[k - 1]
@@ -193,7 +198,7 @@ def analyse(path, do_slice=False, allow_tight=False):
                     continue
                 anchors = [q for q in (u.offset(0.3, JoinType.Round) ^ prev).decompose() if q.area() > 0.05]
                 span = _span(u, anchors)
-                if len(anchors) >= 2 and span < 18:
+                if len(anchors) >= 2 and span < BRIDGE:
                     bridges.append(span)
                 else:
                     over_area += u.area() * LAYER / LAYER
@@ -207,13 +212,13 @@ def analyse(path, do_slice=False, allow_tight=False):
         issue("SUPPORTS", "islands",
               f"{len(floating)} region(s) start in MID-AIR (first at z={zlist[0]} mm, e.g. at xy {floating[0]['xy']}) "
               f"-> spaghetti without supports", "tick supports (--supports on) or re-orient so it grows from the bed")
-    if over_area > 120:
+    if over_area > OH_AREA:
         worst.sort(reverse=True)
-        issue("SUPPORTS", "overhang", f"{over_area:.0f} mm2 of overhang past 45 deg that isn't a short bridge "
+        issue("SUPPORTS", "overhang", f"{over_area:.0f} mm2 of overhang past {OVERHANG:g} deg that isn't a short bridge (< {BRIDGE:g} mm) "
               f"(worst layer z={worst[0][1]:.1f}) -> droops/fails without supports",
-              "tick supports (--supports auto), or chamfer the underside to 45 deg")
-    elif over_area > 30:
-        R["notes"].append(f"{over_area:.0f} mm2 of mild overhang (droopy underside, usually fine)")
+              f"tick supports (--supports auto), or chamfer the underside to {OVERHANG:g} deg")
+    elif over_area > OH_AREA / 4:
+        R["notes"].append(f"{over_area:.0f} mm2 of mild overhang (droopy underside, usually fine; supports asked above {OH_AREA:g} mm2)")
 
     # ---- thin walls (every 4th layer)
     thin12, thin20 = [], []
@@ -221,7 +226,7 @@ def analyse(path, do_slice=False, allow_tight=False):
         cs = layers[k]
         if cs.is_empty():
             continue
-        for r, bucket in ((0.6, thin12), (1.0, thin20)):
+        for r, bucket in ((MINWALL / 2, thin12), (HOUSE_WALL / 2, thin20)):
             opened = cs.offset(-r, JoinType.Round).offset(r, JoinType.Round)
             thin = cs - opened
             big = [q for q in thin.decompose() if q.area() > 1.2]
@@ -231,13 +236,13 @@ def analyse(path, do_slice=False, allow_tight=False):
     R["walls_under_2p0_layers"] = len(thin20)
     tot12 = sum(a for _, a in thin12)
     if thin12 and (len(thin12) >= 3 or tot12 > 10):
-        issue("CAUTION", "walls", f"walls thinner than 1.2 mm on {len(thin12)} sampled layers (from z={thin12[0][0]:.1f}) "
-              f"-> gaps or missing walls", "thicken to >= 2.0 (house minimum) or accept for text/labels")
+        issue("CAUTION", "walls", f"walls thinner than {MINWALL:g} mm on {len(thin12)} sampled layers (from z={thin12[0][0]:.1f}) "
+              f"-> gaps or missing walls", f"thicken to >= {HOUSE_WALL:g} (house minimum) or accept for text/labels", kind="unprintable")
     elif thin12:
-        R["notes"].append(f"tiny thin spots (<1.2 mm) on {len(thin12)} layer(s), {tot12:.1f} mm2: edges/text, usually fine")
+        R["notes"].append(f"tiny thin spots (<{MINWALL:g} mm) on {len(thin12)} layer(s), {tot12:.1f} mm2: edges/text, usually fine")
     elif len(thin20) > max(3, 0.2 * (len(layers) / 4)):
-        issue("CAUTION", "walls", f"walls under 2.0 mm on {len(thin20)} sampled layers",
-              "thicken to 2.0-2.4 mm")
+        issue("CAUTION", "walls", f"walls under {HOUSE_WALL:g} mm on {len(thin20)} sampled layers",
+              f"thicken to {HOUSE_WALL:g}-{HOUSE_WALL + 0.4:g} mm", kind="fragile")
 
     # ---- print-in-place / multi-body
     bodies = [q for q in M.decompose() if q.volume() > 0.5]
@@ -259,19 +264,19 @@ def analyse(path, do_slice=False, allow_tight=False):
         fuse = 0
         for i in range(len(isl0)):
             for j in range(i + 1, len(isl0)):
-                if (isl0[i].offset(0.175, JoinType.Round) ^ isl0[j].offset(0.175, JoinType.Round)).area() > 0.01:
+                if (isl0[i].offset(FUSE / 2, JoinType.Round) ^ isl0[j].offset(FUSE / 2, JoinType.Round)).area() > 0.01:
                     fuse += 1
         if fuse and fit.tag("pip_gap") == "[R]" and not allow_tight:
-            issue("CAUTION", "pip", f"{fuse} first-layer gap(s) under 0.35 mm: elephant foot may weld them "
+            issue("CAUTION", "pip", f"{fuse} first-layer gap(s) under {FUSE:g} mm: elephant foot may weld them "
                   f"(pip_gap {g} is still a research default)",
                   "print the Fit Card once (forge mech build fitcard) -> forge fit set pip_gap <smallest free>")
         elif fuse and allow_tight:
-            R["notes"].append(f"{fuse} first-layer gaps under 0.35 mm: intended (calibration print)")
+            R["notes"].append(f"{fuse} first-layer gaps under {FUSE:g} mm: intended (calibration print)")
         elif fuse:
             R["notes"].append(f"{fuse} first-layer gaps at the calibrated pip_gap {g} [V] (Fit Card proved they break free)")
 
     # ---- auto-support traps (needs the body split above)
-    R["support_angle_deg"] = float(printer.get("support_angle"))
+    R["support_angle_deg"] = float(printer.get("support_angle")); LIM["support_angle"] = R["support_angle_deg"]   # --support-angle override
     R["support_traps"] = []
     if len(bodies) > 1:
         try:
@@ -286,7 +291,7 @@ def analyse(path, do_slice=False, allow_tight=False):
 
     # ---- slice (real time / grams via the slicer hook)
     if do_slice:
-        t, g = printer.slice_stats(path, "off" if R["support_traps"] else "on" if (floating or over_area > 120) else "off", timeout=1800)
+        t, g = printer.slice_stats(path, "off" if R["support_traps"] else "on" if (floating or over_area > OH_AREA) else "off", timeout=1800)
         if t: R["print_time"] = t
         if g: R["grams"] = g
         if not t and not g:
@@ -310,6 +315,7 @@ def orient_search(path, step=15, top=3):
     """try tilts about X and Y (step deg) + the 6 axis lays; score = contact (big good) - overhang (bad) - height.
     Organic parts often want an odd tilt (a helmet printed best tilted 20 deg on the back of the head)."""
     import trimesh
+    BED = printer.bed()
     t0 = mk.mf2tm(mk.load_manifold(path))
     cands = []
     angs = list(range(-90, 91, step)) + [180]
@@ -365,6 +371,10 @@ def report(R):
     print(f"[{icon}] {R['file']}  bbox {R['bbox_mm']} mm  vol {R['volume_cm3']} cm3  contact {R.get('contact_mm2')} mm2 "
           f"patch {R.get('contact_patch_mm')}  bodies {R.get('bodies')}")
     print(f"   {R['supports_text']}")
+    L = R.get("limits", {})
+    if L:
+        print(f"   limits   {R.get('printer')}: bridge < {L['bridge_mm']:g} mm, overhang {L['overhang_deg']:g} deg, wall >= {L['min_wall_mm']:g} mm, "
+              f"first-layer fuse < {L['first_layer_fuse_mm']:g} mm, auto-support < {L['support_angle']:g} deg  (forge printer: sources)")
     for i in R["issues"]:
         print(f"   {i['level']:8s} {i['code']:9s} {i['msg']}")
         if i.get("fix"):
@@ -380,7 +390,7 @@ if __name__ == "__main__":
     ap.add_argument("model"); ap.add_argument("--slice", action="store_true"); ap.add_argument("--json")
     ap.add_argument("--heat", help="write a risk-coloured PLY here (render with forge heat)")
     ap.add_argument("--allow-tight", action="store_true", help="calibration prints (Fit Card): tight gaps are intended")
-    ap.add_argument("--support-angle", type=float, help="slicer auto-support threshold, deg from horizontal (default: printer profile support_angle, 30)")
+    ap.add_argument("--support-angle", type=float, help="slicer auto-support threshold, deg from horizontal (default: the printer profile's support_angle)")
     ap.add_argument("--orient", action="store_true", help="search tilts for the best print pose (organic parts)")
     a = ap.parse_args()
     if a.orient:

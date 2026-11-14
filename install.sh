@@ -2,7 +2,7 @@
 # Mold3D one-command installer (macOS + Linux, no sudo).
 #   curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
 # Env: MOLD3D_DIR (default ~/.claude/skills/mold3d)  MOLD3D_REPO  MOLD3D_REF (branch)
-#      MOLD3D_PRINTER=<profile basename, e.g. prusa-mk4>  MOLD3D_NO_CODEX=1 (skip ~/.codex link)
+#      MOLD3D_PRINTER=<profile basename, e.g. prusa-mk4, anycubic-kobra-x>  MOLD3D_NO_CODEX=1 (skip ~/.codex link)
 #      MOLD3D_NO_AUTO_UV=1 (never auto-install uv; fail with manual instructions instead)
 #      MOLD3D_VERBOSE=1 (show every technical detail; default output is short and plain)
 # Raw command output goes to $MOLD3D_DIR/install.log (overwritten each run) and is pointed to on failure.
