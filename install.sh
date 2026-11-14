@@ -23,7 +23,7 @@ step "1/5 Getting Mold3D into $DIR"
 if [ -d "$DIR/.git" ]; then
   keep=""
   if [ -f "$DIR/knowledge/printer.json" ]; then   # older clones tracked this file; keep the user's copy
-    keep="$(mktemp)"; cp "$DIR/knowledge/printer.json" "$keep"
+    keep="$(mktemp "${TMPDIR:-/tmp}/mold3d-printer.XXXXXX")"; cp "$DIR/knowledge/printer.json" "$keep"
     git -C "$DIR" checkout -q -- knowledge/printer.json 2>/dev/null || true
   fi
   git -C "$DIR" fetch -q origin ${REF:+"$REF"}
@@ -116,7 +116,7 @@ opt ffmpeg "showcase video / GIF output"
 # 6. Verify
 step "5/5 Checking it works"
 bin/forge doctor 2>&1 | tail -15 || true
-SMOKE="$(mktemp -d)"
+SMOKE="$(mktemp -d "${TMPDIR:-/tmp}/mold3d.XXXXXX")"
 trap 'rm -rf "$SMOKE"' EXIT
 if "$DIR/bin/forge" mech build fitcard --out "$SMOKE/fitcard" >"$SMOKE/log" 2>&1; then
   ok "smoke test: built and self-tested the Fit Card (all motion sweeps clear)"
