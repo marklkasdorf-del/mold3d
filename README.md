@@ -165,7 +165,7 @@ Fully specified parts come out near human-with-calipers quality (~0.96); every g
 - Threads and complex linkages (> 5 moving parts) are unreliable.
 
 ### What is not proven yet
-Most print-in-place gaps in the benchmark (0.29-0.36 mm) are **verified in geometry, not on real plastic**, and CYCLO-11 itself has not been printed yet. The first real result is the **Fit Card** (`forge mech build fitcard`, about an hour, ~16 g), which measures your printer's real gaps; `forge fit set` writes them into the one table all generators read. On 2026-11-13 it was printed on an Anker M5C (stock profile, PLA, supports off): spinners at 0.20 mm and wider broke free, 0.15 mm fused; hinges at 0.35 mm and wider folded, 0.25 mm fused. So `pip_gap` 0.20 / `pip_vgap` 0.35 on that printer. That is one printer; the shipped default stays as is until you calibrate yours, and until then every print-in-place design carries a preflight CAUTION by design. The images above are renders.
+Most print-in-place gaps in the benchmark (0.29-0.36 mm) are **verified in geometry, not on real plastic**, and CYCLO-11 itself has not been printed yet. The first real result is the **Fit Card** (`forge mech build fitcard`, about an hour, ~16 g), which measures your printer's real gaps; `forge fit set` writes them into the one table all generators read. On 2026-11-13 it was printed on an Anycubic Kobra X (supports off): spinners at 0.20 mm and wider broke free, 0.15 mm fused; hinges at 0.35 mm and wider folded, 0.25 mm fused. So `pip_gap` 0.20 / `pip_vgap` 0.35 on that printer. That is one printer; the shipped default stays as is until you calibrate yours, and until then every print-in-place design carries a preflight CAUTION by design. The images above are renders.
 
 ## Quickstart
 
