@@ -261,6 +261,11 @@ def verify(path, spec=None):
         lo, hi = spec["volume_mm3"]
         ok = lo <= vol <= hi
         rows.append(row("spec_volume", "PASS" if ok else "FAIL", round(vol, 1), f"want [{lo}, {hi}]" + ("" if ok else " (a boolean may have dropped/duplicated geometry)")))
+    # --- the "no guessed numbers" gate: every fit number in the spec needs a real source (spec_lib)
+    import spec_lib
+    fr = spec_lib.fit_row(spec)
+    if fr:
+        rows.append(fr)
     status = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
     return {"status": status, "info": info, "checks": rows}
 

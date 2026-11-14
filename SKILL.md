@@ -15,7 +15,7 @@ Envs: `$FORGE/.venv-cad` (`FORGE_CAD_PY`); optional `$FORGE/.venv-ai` (`FORGE_AI
 
 ## Rules that never bend
 1. **Numbers first, pictures second.** No claim about geometry unless it comes from a tool's output (verify/selftest/preflight/grade JSON) or a render you read this iteration. Never describe an STL from memory.
-2. **No silent guesses.** Custom parts get `spec.md` + `spec.json` with numeric success criteria first. A missing fit number is looked up, asked (see Questionnaire), or marked ASSUMED.
+2. **No silent guesses.** Custom parts get `spec.md` + `spec.json` with numeric success criteria first. Every number the part must FIT goes in `spec.json` `fit` with its source (`measured | datasheet | parts-find | photofit | user | library | ASSUMED`). A missing fit number is looked up, asked (see Questionnaire), or marked ASSUMED, which stamps the Print Report **NOT FIT-CHECKED**.
 3. **One change per iteration**, keep every `iter_NN/`, max 6 per phase, then re-plan.
 4. **Anything that moves ships with a passing self-test** (sweep clear + must-jam control + measured gaps).
 5. **Every print gets `forge preflight` before the slice; its verdict decides supports.** NO-GO = fix geometry/orientation first. Print-in-place / multi-body parts also get `forge export <stl>`: hand over the 3MF, not the STL (a slicer's auto supports fill the gaps and weld the parts; an STL can't carry "supports off").
@@ -50,13 +50,13 @@ No `$FORGE/.venv-cad`? Run `bash $FORGE/install.sh` first. Run `forge doctor` on
 **Custom lane** (MODEL): follow phases 1-5.
 
 ## Questionnaire (vague requests)
-**Aim to be right the first time:** gather everything before building. If the request lacks a number the part depends on (what it attaches to, size, screw size, device model): look it up first (`parts-find`, `knowledge/devices.json`, datasheet, `photofit`). What is still missing: ask 1-3 multiple-choice questions, each with smart defaults ("M3", "standard <device> size (I'll look it up)", "I'll measure it"; the user can type Other). In Claude Code use the AskUserQuestion tool; in Codex or when it is unavailable, send a short numbered list with defaults marked. Ask only about numbers that change whether it FITS or WORKS, never color, fillets or other safe defaults. If the user says "just make it", proceed with defaults, list them under `"assumed"` in `spec.json`, and the Print Report shows an Assumed row. Format and examples: `reference/questions.md`.
+**Aim to be right the first time:** gather everything before building. If the request lacks a number the part depends on (what it attaches to, size, screw size, device model): look it up first (`parts-find`, `knowledge/devices.json`, datasheet, `photofit`). What is still missing: ask 1-3 multiple-choice questions, each with smart defaults ("M3", "standard <device> size (I'll look it up)", "I'll measure it"; the user can type Other). In Claude Code use the AskUserQuestion tool; in Codex or when it is unavailable, send a short numbered list with defaults marked. Ask only about numbers that change whether it FITS or WORKS, never color, fillets or other safe defaults. If the user says "just make it", proceed with defaults, record each in `spec.json` `fit` with `"source": "ASSUMED"`; the Print Report is stamped NOT FIT-CHECKED with the cheapest fix, and you offer that fix in one line after the report. Format, sources and examples: `reference/questions.md`.
 
 ## Phase 1: BRIEF (custom parts)
 1. Collect what the user already told you (device model, measurements, photos).
 2. **Reference pass** for anything with a name: look at 6-9 reference images or top designs; write "## Form" in spec.md (proportions, 2-3 signature features, variant).
 3. Dimensions: look up, never recall: `forge parts-find "<part>" [--download]` + `forge step2stl`, datasheets, web search. Cite sources in spec.md. An owned object that can't be looked up: `forge photofit mat`, print at 100%, photo, outline within ~0.3 mm.
-4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/); mark estimates on fit interfaces `estimate` or `assumed`.
+4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/): every fit number under `fit` with its source; nothing on a fit interface is left unsourced.
 
 ## Phase 2: LANE + PLAN
 b123d (default: functional, dimensioned, fit-critical; `templates/part_b123d.py`), scad (trivial or BOSL2), sdf (`lib/sculpt.py`, organic), mesh (`lib/meshkit.py`: edit downloads, big booleans, flexify, split), bpy (renders, text art). Plan in comments at the top of the part file: features as functions, a parameter block in mm, clearances from `fit.get("pip_gap"/"slide_gap"/"hole_comp"...)` (never hard-code 0.3 or hole sizes), origin bottom-centre on Z=0, print orientation designed in (largest flat face down, overhangs <= 45 deg, bridges < 18 mm, walls >= 2.0).
@@ -85,6 +85,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 | | |
 |---|---|
 | Verdict | ✅ GO / ⚠️ GO + supports / ❌ NO-GO — supports ON/OFF |
+| Fit | ✅ fit-checked: N fit numbers sourced / ⚠️ NOT FIT-CHECKED: <what> assumed, cheapest fix (only when `fit` is set) |
 | Moving parts | <n>, all clear through full motion |
 | Gaps | <mm> (calibrated on your printer / default — print the Fit Card) |
 | Assumed | <numbers nobody confirmed> (only when `assumed` is set) |
@@ -104,7 +105,7 @@ After a print ask "What was off? (fit / looks / strength / print quality / nothi
 ## STOP-AND-CHECK (before each render and before "done")
 - [ ] axis/centre/units (bbox vs spec, mm) - [ ] every boolean has a volume delta - [ ] no floating parts (components == spec)
 - [ ] walls >= 2.0 - [ ] movers: selftest PASS, controls jam, gaps ~= fit.pip_gap - [ ] preflight GO/GO+SUPPORTS
-- [ ] named object: reference pass done, Looks >= 30% (if AI env) - [ ] fit numbers sourced or listed as ASSUMED - [ ] claimed with numbers
+- [ ] named object: reference pass done, Looks >= 30% (if AI env) - [ ] every `fit` number sourced (no NOT FIT-CHECKED stamp, or the fix offered) - [ ] claimed with numbers
 
 ## Boundaries
 Reliable: functional parts with real numbers, print-in-place mechanisms, looked-up standard parts, Gridfinity, photo-fit pockets, flexify. Soft: text->3D detail. Unreliable: hand-modeled organic/iconic forms, threads, linkages with > 5 moving parts.

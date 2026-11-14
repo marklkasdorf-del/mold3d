@@ -1,12 +1,27 @@
 {
-  "_comment": "forge spec: success criteria as NUMBERS, written BEFORE modeling. Keys are read by forge/bin/verify. Remove this key or leave it; unknown keys are ignored. Run `forge/bin/verify --help` if a key's shape looks different.",
+  "_comment": "forge spec: success criteria as NUMBERS, written BEFORE modeling. `forge verify <stl> --spec spec.json` prints every line as PASS/FAIL in plain words; `forge report` shows 'Checks: N of N green'. Simple parts need only the first three keys (bbox_mm, components, min_wall_mm). Delete this key or keep it; unknown keys are ignored.",
   "name": "mypart",
   "bbox_mm": [80.0, 50.0, 20.0],
-  "bbox_tol": 0.3,
-  "volume_mm3": [19000, 20500],
   "components": 1,
   "min_wall_mm": 1.6,
-  "bed": [220, 220, 250],
+
+  "bbox_tol": 0.3,
+  "volume_mm3": [19000, 20500],
   "max_support_pct": 10,
-  "must_be_watertight": true
+  "must_be_watertight": true,
+
+  "fit": {
+    "_comment": "every number that decides whether the part FITS something, with where it came from. Sources: measured | datasheet | parts-find | photofit | user | library | ASSUMED. An ASSUMED fit number stamps the Print Report NOT FIT-CHECKED.",
+    "pod diameter": {"mm": 38.2, "source": "measured", "note": "calipers"},
+    "screw clearance hole": {"mm": 3.4, "source": "parts-find", "ref": "ISO 4762 M3"},
+    "tube diameter": {"mm": 25, "source": "ASSUMED", "fix": "ask: what tube diameter? (default 25)"}
+  },
+
+  "checks": {
+    "_comment": "named requirements, one line each, printed PASS/FAIL in plain words. Types: hole, empty_at, solid_at, fits, height_mm.",
+    "hole for the M3 screw": {"hole": {"at": [32, 17], "d": 3.4, "tol": 0.2}},
+    "USB-C cutout is open": {"empty_at": [0, -25, 10]},
+    "floor is solid under the pod": {"solid_at": [0, 0, 1.2]},
+    "pod drops in with clearance": {"fits": "pod_dummy.stl", "clearance": 0.3, "move": [0, 0, 2.4]}
+  }
 }

@@ -27,14 +27,28 @@ Reply "go" to use the defaults.
 ```
 
 ## Step 3: "just make it" / no answer
-Proceed with the defaults and record each one as ASSUMED. Put them in the design's `spec.json`:
+Proceed with the defaults and record each one as ASSUMED in the design's `spec.json`.
+
+## The fit block: every fit number carries its source
+Numbers that decide whether the part FITS something go under `fit`, each with where it came from:
 
 ```json
-{ "assumed": { "tube diameter": "25 mm", "screw": "M3" } }
+{
+  "fit": {
+    "pod diameter":         {"mm": 38.2, "source": "measured", "note": "calipers"},
+    "screw clearance hole": {"mm": 3.4,  "source": "parts-find", "ref": "ISO 4762 M3"},
+    "tube diameter":        {"mm": 25,   "source": "ASSUMED", "fix": "ask: what tube diameter? (default 25)"}
+  }
+}
 ```
 
-`forge report <dir>` reads `spec.json` in the design folder (`forge run --spec spec.json` copies it there; otherwise save it next to the STL) and adds an **Assumed** row to the Print Report:
+Sources: `measured` (calipers, ruler), `datasheet` (maker's spec page, cite it in spec.md), `parts-find` (`forge parts-find`), `photofit` (`forge photofit`), `user` (the user typed the number), `library` (`knowledge/devices.json` or `knowledge/objects.json`, which carry their own sources), `ASSUMED` (a default nobody confirmed). A missing or made-up source counts as ASSUMED. Only `fit` entries are judged: walls, fillets, colours never nag.
 
-`| Assumed | tube diameter 25 mm; screw M3 (not confirmed, check before you print) |`
+The older shorthand still works and means the same thing: `{ "assumed": { "tube diameter": "25 mm", "screw": "M3" } }`.
 
-No `assumed` key (or an empty one) means no row. Never list a number as assumed if the user or a datasheet gave it. After the report, offer: "Tell me the real tube diameter and I'll rebuild."
+What happens next:
+- `forge verify <stl> --spec spec.json` adds a line: `WARN  NOT FIT-CHECKED: tube diameter is assumed. Fix: ...` (a warning, not a failure: the build can finish, but it is not green).
+- `forge report <dir>` stamps the header **NOT FIT-CHECKED** and adds a `Fit` row naming the assumed numbers and the cheapest fix; the `Assumed` row lists them all. With every fit number sourced the row reads `fit-checked: 3 fit numbers sourced (2 measured, 1 parts-find)`. No fit block, no row.
+- The cheapest fix is picked from the name (screw/bearing/motor -> `forge parts-find`; phone/board/device -> the maker's spec sheet; outline/pocket -> `forge photofit`; anything else -> one question with the default). Set `"fix"` on the entry to override it.
+
+Never list a number as assumed if the user or a datasheet gave it. After a stamped report, offer the fix in one line: "Tell me the real tube diameter and I'll rebuild."

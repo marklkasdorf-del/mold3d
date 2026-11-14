@@ -167,4 +167,19 @@ echo '{"assumed": {"screw size": "M4", "phone width": "72 mm"}}' > "$T/asm/spec.
 grep -q "^| Assumed | screw size M4; phone width 72 mm" "$T/asm.log" && ok "report: spec.json 'assumed' -> an Assumed row" || no "report Assumed row" "$(cat "$T/asm.log")"
 grep -q "^| Assumed" "$T/rep.log" && no "report: no assumed values -> no Assumed row" "row shown" || ok "report: nothing assumed -> no Assumed row"
 
+# 9 the "no guessed numbers" gate: fit numbers in spec.json carry a source; ASSUMED (or a made-up source) on a fit number
+#   stamps the report NOT FIT-CHECKED with the cheapest fix; all sourced -> "fit-checked"; verify shows it as a WARN, never a FAIL
+G="$T/fitgate"; rm -rf "$G"; mkdir -p "$G"; cp "$T/bridge10.stl" "$G/bridge10.stl"
+echo '{"fit": {"pod diameter": {"mm": 38.2, "source": "measured"}, "tube diameter": {"mm": 25, "source": "ASSUMED"}, "M3 screw": {"mm": 3.4, "source": "guess"}}}' > "$G/spec.json"
+"$CAD" report.py "$G/bridge10.stl" --no-preview --no-export > "$G/rep.log" 2>&1
+grep -q "PRINT REPORT.*NOT FIT-CHECKED" "$G/rep.log" && grep -q "^| Fit | ⚠️ NOT FIT-CHECKED: tube diameter 25 mm and M3 screw 3.4 mm were assumed.*Cheapest fix: ask one question: what is the tube diameter? (default 25 mm)" "$G/rep.log" \
+  && grep -q "^| Assumed | tube diameter 25 mm; M3 screw 3.4 mm" "$G/rep.log" && ok "fit gate: ASSUMED + made-up source -> header stamped NOT FIT-CHECKED, Fit row names both + cheapest fix" || no "fit gate stamp" "$(head -5 "$G/rep.log")"
+"$CAD" verify_cli.py "$G/bridge10.stl" --spec "$G/spec.json" --json > "$G/verify.json" 2>/dev/null; rc=$?
+"$CAD" -c "import json,sys;r=json.load(open('$G/verify.json'));f=[c for c in r['checks'] if c['name']=='fit_sources'][0];sys.exit(0 if f['status']=='WARN' and f['value']==2 and r['status']!='FAIL' and $rc==0 else 1)" && ok "fit gate: verify -> WARN fit_sources (2 assumed), exit 0 (a warning, not a failure)" || no "fit gate verify" "$(cat "$G/verify.json" | tail -5)"
+echo '{"fit": {"pod diameter": {"mm": 38.2, "source": "measured"}, "M3 screw": {"mm": 3.4, "source": "parts-find"}}}' > "$G/spec.json"
+"$CAD" report.py "$G/bridge10.stl" --no-preview --no-export > "$G/rep2.log" 2>&1
+! grep -q "NOT FIT-CHECKED" "$G/rep2.log" && grep -q "^| Fit | ✅ fit-checked: 2 fit numbers sourced (1 measured, 1 parts-find)" "$G/rep2.log" && ! grep -q "^| Assumed" "$G/rep2.log" && ok "fit gate: every fit number sourced -> no stamp, 'fit-checked: 2 fit numbers sourced'" || no "fit gate clean" "$(head -5 "$G/rep2.log")"
+echo '{"fit": {"screw size": {"mm": 4, "source": "ASSUMED"}}}' > "$G/spec.json"
+"$CAD" report.py "$G/bridge10.stl" --no-preview --no-export 2>/dev/null | grep -q 'Cheapest fix: `forge parts-find "screw size"`' && ok "fit gate: a screw's cheapest fix is forge parts-find" || no "fit gate fix" "wrong fix"
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

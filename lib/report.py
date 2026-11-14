@@ -61,18 +61,17 @@ def top_issues(issues, n=2):
 
 
 # ---------------------------------------------------------------- gathering
-def read_assumed(out_dir, stl):
-    """Numbers the design depends on that nobody confirmed. Convention: the design's spec.json has
-    "assumed": {"screw diameter": "M4", "phone width": "72 mm"}. Looked up next to the report, then next to the STL."""
-    for d in (out_dir, os.path.dirname(stl)):
-        p = os.path.join(d, "spec.json")
-        if os.path.exists(p):
-            a = (_jload(p) or {}).get("assumed")
-            if isinstance(a, dict) and a:
-                return {str(k): v for k, v in a.items()}
-            if isinstance(a, list) and a:
-                return {str(k): "" for k in a}
-    return {}
+def read_spec(out_dir, stl):
+    """the design's spec.json: next to the report, else next to the STL, else {}."""
+    import spec_lib
+    p = spec_lib.find_spec(out_dir, os.path.dirname(stl))
+    return spec_lib.load(p) if p else {}
+
+
+def read_assumed(spec):
+    """Fit numbers nobody confirmed (spec_lib: "fit" entries with source ASSUMED plus the older "assumed" shorthand)."""
+    import spec_lib
+    return {f["name"]: spec_lib.fmt(f["value"]) if f["value"] not in (None, "") else "" for f in spec_lib.assumed_fit(spec)}
 
 
 def resolve(arg):
@@ -201,7 +200,12 @@ def gather(a):
                          "issues": [{k: i.get(k) for k in ("level", "code", "msg", "fix")} for i in R.get("issues", [])],
                          "notes": R.get("notes", []), "source": how}}
     rep["watch_for"] = top_issues(R.get("issues", []))
-    rep["assumed"] = read_assumed(out_dir, stl)
+    spec = read_spec(out_dir, stl)
+    rep["assumed"] = read_assumed(spec)
+    import spec_lib
+    fs = spec_lib.fit_summary(spec)
+    if fs:
+        rep["fit"] = {"stamped": fs[0], "text": fs[1], "numbers": spec_lib.fit_numbers(spec)}
     if mech:
         rep["moving_parts"] = mech
         tag = fit.tag("pip_gap")
@@ -260,7 +264,12 @@ def markdown(rep):
         head.append(_dims(rep["bbox_mm"]))
     if rep.get("printer"):
         head.append(rep["printer"])
+    fitinfo = rep.get("fit")
+    if fitinfo and fitinfo.get("stamped"):
+        head.append("**NOT FIT-CHECKED**")
     rows = [("Verdict", verdict_text(rep["preflight"]))]
+    if fitinfo:
+        rows.append(("Fit", ("⚠️ " if fitinfo["stamped"] else "✅ ") + fitinfo["text"]))
     mp = rep.get("moving_parts")
     if mp:
         if mp.get("selftest_ok") is None:
