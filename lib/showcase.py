@@ -150,6 +150,8 @@ def main():
         sys.exit("render failed:\n" + r.stdout[-1500:] + r.stderr[-1500:])
     if a.annotate:
         annotate_frames(frames, pngs, spec, a, outdir)
+    if not shutil.which("ffmpeg"):
+        sys.exit("forge showcase: videos are off (ffmpeg isn't installed). Everything else works; the stills are in " + frames)
     mp4 = os.path.join(outdir, f"{name}_showcase.mp4"); gif = os.path.join(outdir, f"{name}_showcase.gif")
     run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "24", "-i", os.path.join(frames, "f%03d.png"),
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", mp4])

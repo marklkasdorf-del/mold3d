@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""forge <run|doctor|preflight|export|...> ...   (see bin/forge --help)
+"""forge <run|doctor|preflight|export|report|...> ...   (see bin/forge --help)
 run <part_file> [--lane b123d|scad|bpy] [--spec spec.json] [--name N] [--no-render] [--section z=5] [--ref img] [--eevee]
   -> out/<name>/{<name>.stl, views/, sheet.png, verify.json, REPORT.md, src.*, iter_NN/}. Exit 1 on FAIL."""
 import argparse, json, os, shutil, subprocess, sys, shlex
@@ -23,7 +23,7 @@ HINTS = {
     "min_wall": "Thicken the listed regions (>=1.2 mm for 0.4 nozzle; 2 mm for strength) at the cluster locations.",
     "spec_bbox": "Dimensions differ from spec: check units (1 unit = 1 mm), scale and which axis is which.",
     "spec_volume": "Volume outside expected range: a boolean probably dropped/duplicated geometry.",
-    "render": "Render failed: see log. If Blender crashes at startup (exit 139) and you run inside a sandbox, run outside it.",
+    "render": "Previews are off (Blender didn't start). Everything else works. If Blender is installed and crashed (exit 139) inside a sandbox, re-run outside it.",
     "bed_contact": "Little surface on the bed: add a flat base/brim or flip the part so its biggest flat face is z-min.",
 }
 
@@ -42,6 +42,8 @@ def lane_of(path, forced):
 def run_lane(lane, part, out_stl, parts_dir, log):
     env = dict(os.environ, FORGE_OUT_STL=out_stl, FORGE_PARTS_DIR=parts_dir, FORGE_LIB=os.path.join(FORGE, "lib"))
     env["PYTHONPATH"] = os.path.join(FORGE, "lib") + os.pathsep + env.get("PYTHONPATH", "")
+    if lane == "scad" and not forge_env.find_openscad():
+        sys.exit("forge: the OpenSCAD lane is off (OpenSCAD isn't installed). Everything else works. Install OpenSCAD or set OPENSCAD=/path, or use the b123d lane.")
     if lane == "b123d": cmd = [CAD_PY, part]
     elif lane == "scad": cmd = [OPENSCAD, "--backend=Manifold", "-o", out_stl, part]
     else: cmd = [os.path.join(FORGE, "bin", "blender_py"), part]
@@ -96,7 +98,7 @@ def cmd_run(a):
         os.remove(summ)
         render_ok = p.returncode == 0 and os.path.exists(os.path.join(od, "sheet.png"))
         if not render_ok:
-            rows.append(V.row("render", "FAIL", None, "see out/%s/render.log; exit 139 = Blender crashed (try outside an agent sandbox)" % name))
+            rows.append(V.row("render", "FAIL", None, "previews are off (Blender isn't installed or didn't start). Everything else works. See out/%s/render.log; exit 139 = Blender crashed (re-run outside an agent sandbox)" % name))
             print(p.stdout[-800:], p.stderr[-800:])
     res["status"] = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
     res["lane"] = lane; res["name"] = name
@@ -129,9 +131,12 @@ def cmd_run(a):
 
 def cmd_doctor(a):
     ok = True
-    def chk(label, good, fix="", required=True):
+    def chk(label, good, fix="", required=True, off=None):
         nonlocal ok
-        print(f"  [{'ok' if good else ('MISSING' if required else 'optional')}] {label}" + ("" if good else f"\n        fix: {fix}"))
+        if off and not good and not required:
+            print(f"  [optional] {off}\n        to turn it on: {fix}")
+        else:
+            print(f"  [{'ok' if good else ('MISSING' if required else 'optional')}] {label}" + ("" if good else f"\n        fix: {fix}"))
         if required: ok &= bool(good)
     import printer
     print("forge doctor")
@@ -139,13 +144,15 @@ def cmd_doctor(a):
     pr = printer.load()
     print(f"  [info] printer: {pr['name']}  bed {pr['bed']}  nozzle {pr['nozzle']}  (knowledge/printer.json)")
     bl = forge_env.find_blender()
-    chk("Blender (renders, showcase, heatmaps)", bl, "optional: install Blender 4.x/5.x (https://www.blender.org) or set BLENDER=/path/to/blender. Core CAD/verify/preflight works without it", required=False)
+    chk("Blender (renders, showcase, heatmaps)", bl, "install Blender 4.x/5.x (https://www.blender.org) or set BLENDER=/path/to/blender", required=False,
+        off="Renders, previews and heatmaps are off (Blender isn't installed). Everything else works.")
     if bl:
         p = subprocess.run([bl, "-b", "--python-expr", "import bpy;print('BLV',bpy.app.version_string)"], capture_output=True, text=True)
         good = "BLV" in p.stdout
         chk("Blender runs headless" + (" (" + p.stdout.split("BLV")[1].split()[0] + ")" if good else f" (exit {p.returncode})"), good,
             "exit 139/-11 usually means an agent sandbox is hiding the GPU: run this command outside the sandbox" if p.returncode in (139, -11, -6, 134) else "run Blender manually once; check OS security prompts", required=False)
-    chk("openscad (only for the scad lane)", forge_env.find_openscad(), "install OpenSCAD 2021+ (a Manifold-backend nightly is best) or set OPENSCAD=...", required=False)
+    chk("openscad (only for the scad lane)", forge_env.find_openscad(), "install OpenSCAD 2021+ (a Manifold-backend nightly is best) or set OPENSCAD=...", required=False,
+        off="The OpenSCAD part lane is off (OpenSCAD isn't installed). Everything else works.")
     chk(f"CAD python: {CAD_PY}", os.path.exists(CAD_PY), "python3.12 -m venv .venv-cad && .venv-cad/bin/pip install -r requirements-cad.txt")
     if os.path.exists(CAD_PY):
         p = subprocess.run([CAD_PY, "-c", "import build123d,trimesh,numpy,scipy,PIL;print(build123d.__version__)"], capture_output=True, text=True)
@@ -154,15 +161,18 @@ def cmd_doctor(a):
         chk("CAD stack (manifold3d, usd-core, opencv, scikit-image, lxml, networkx ...)", "ok" in p.stdout, "pip install -r requirements-cad.txt")
     ai = forge_env.AI_PY
     have_ai = os.path.exists(ai) and ai != CAD_PY
-    chk(f"AI python (text3d / looks): {ai}", have_ai, "python3.12 -m venv .venv-ai && .venv-ai/bin/pip install -r requirements-ai.txt   (only needed for `forge text3d` and `forge looks`)", required=False)
+    chk(f"AI python (text3d / looks): {ai}", have_ai, "python3.12 -m venv .venv-ai && .venv-ai/bin/pip install -r requirements-ai.txt", required=False,
+        off="Text-to-3D and Looks Score are off (the AI environment isn't installed). Everything else works.")
     hub = os.path.join(os.environ.get("HF_HOME") or os.path.expanduser("~/.cache/huggingface"), "hub")
     for rid in ("models--SimianLuo--LCM_Dreamshaper_v7", "models--tencent--Hunyuan3D-2mini", "models--openai--clip-vit-base-patch32"):
         chk(f"model downloaded: {rid.split('--', 1)[1]}", os.path.isdir(os.path.join(hub, rid)), "downloaded on first `forge text3d` / `forge looks` run (see THIRD_PARTY_NOTICES.md for licenses)", required=False)
     hy = os.path.join(HERE, "text3d", "Hunyuan3D-2")
     chk("Hunyuan3D-2 source checkout (lib/text3d/Hunyuan3D-2)", os.path.isdir(hy), "git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2 lib/text3d/Hunyuan3D-2   (only for `forge text3d`)", required=False)
-    chk("ffmpeg (showcase videos)", shutil.which("ffmpeg"), "install ffmpeg", required=False)
+    chk("ffmpeg (showcase videos)", shutil.which("ffmpeg"), "install ffmpeg", required=False,
+        off="Showcase videos are off (ffmpeg isn't installed). Everything else works.")
     chk("slicer hook (printer.json slicer_cmd / FORGE_SLICER_CMD)", bool(os.environ.get("FORGE_SLICER_CMD") or pr.get("slicer_cmd")),
-        "optional: lets `preflight --slice` / `plate --slice` report time and grams; otherwise slice the STL in your slicer", required=False)
+        "set slicer_cmd in knowledge/printer.json (or FORGE_SLICER_CMD)", required=False,
+        off="Print time and grams are off (no slicer hook set). Everything else works; slice the file in your slicer.")
     fj = os.path.join(FORGE, "knowledge", "fit.json")
     print("  [info] fit.json:", "calibrated" if os.path.exists(fj) else "NOT calibrated yet -> print the Fit Card (forge mech build fitcard)")
     print("\n" + ("all required dependencies present" if ok else "some required dependencies missing (see fixes above)"))
@@ -226,6 +236,7 @@ NEW = {
     "flexify": lambda r: _cad("flexify.py", r),
     "preflight": lambda r: _cad("preflight.py", r),
     "heat": cmd_heat,
+    "report": lambda r: _cad("report.py", [os.path.abspath(r[0])] + r[1:] if r and not r[0].startswith("-") else r),
     "export": lambda r: _cad("export3mf.py", [os.path.abspath(x) if i == 0 or (i and r[i - 1] == "--out") else x for i, x in enumerate(r)]),
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),
     "ar": lambda r: _cad("ar.py", r),
@@ -247,7 +258,7 @@ if len(sys.argv) > 1 and sys.argv[1] in NEW:
     NEW[sys.argv[1]](sys.argv[2:])
 
 ap = argparse.ArgumentParser(prog="forge", epilog="also: topo | parts-find | step2stl | movecheck | grade | mech | fit | "
-                             "flexify | preflight | export | heat | text3d | ar | showcase | gridfinity | photofit | split | sculpt | looks | remix | make | plate")
+                             "flexify | preflight | export | report | heat | text3d | ar | showcase | gridfinity | photofit | split | sculpt | looks | remix | make | plate")
 sub = ap.add_subparsers(dest="cmd", required=True)
 r = sub.add_parser("run"); r.add_argument("part"); r.add_argument("--lane", choices=["b123d", "scad", "bpy"]); r.add_argument("--spec"); r.add_argument("--name")
 r.add_argument("--no-render", action="store_true"); r.add_argument("--section"); r.add_argument("--ref"); r.add_argument("--eevee", action="store_true")

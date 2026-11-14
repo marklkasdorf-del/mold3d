@@ -5,7 +5,7 @@ BL="${BLENDER:-}"
 if [ -z "$BL" ]; then
   for c in "$(command -v blender 2>/dev/null)" /Applications/Blender.app/Contents/MacOS/Blender /usr/bin/blender; do [ -n "$c" ] && [ -x "$c" ] && BL="$c" && break; done
 fi
-[ -x "$BL" ] || { echo "blender_py: Blender not found (install it or set BLENDER=/path/to/blender)" >&2; exit 127; }
+[ -x "$BL" ] || { echo "blender_py: renders and previews are off (Blender isn't installed). Everything else works. To turn them on: install Blender or set BLENDER=/path/to/blender." >&2; exit 127; }
 [ $# -ge 1 ] || { echo "usage: blender_py <script.py> [args...]" >&2; exit 2; }
 SCRIPT="$1"; shift
 [ -f "$SCRIPT" ] || { echo "blender_py: no such script $SCRIPT" >&2; exit 2; }

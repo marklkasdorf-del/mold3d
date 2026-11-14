@@ -18,7 +18,7 @@ done
 # interpreter: $FORGE_CAD_PY, else <skill>/.venv-cad, else python3 on PATH
 PY="${FORGE_CAD_PY:-}"; [ -n "$PY" ] || { [ -x "$F/.venv-cad/bin/python" ] && PY="$F/.venv-cad/bin/python" || PY="$(command -v python3)"; }
 mkdir -p "$OUT"; rm -rf "$OUT/views" "$OUT/cams.json"
-"$F/bin/blender_py" "$F/lib/render_views.py" "$(cd "$(dirname "$STL")" && pwd)/$(basename "$STL")" "$(cd "$OUT" && pwd)" "${BARGS[@]}" || { echo "render: Blender step failed" >&2; exit 1; }
+"$F/bin/blender_py" "$F/lib/render_views.py" "$(cd "$(dirname "$STL")" && pwd)/$(basename "$STL")" "$(cd "$OUT" && pwd)" "${BARGS[@]}" || { echo "render: previews are off (Blender isn't installed or didn't start). Everything else works." >&2; exit 1; }
 [ -f "$OUT/cams.json" ] || { echo "render: Blender produced no cams.json (render failed)" >&2; exit 1; }
 "$PY" "$F/lib/annotate.py" "$OUT" "${AARGS[@]}" || exit 1
 rm -f "$OUT/cams.json"

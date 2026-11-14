@@ -47,7 +47,7 @@ Printer: `knowledge/printer.json` (bed, nozzle, layer; examples in `knowledge/pr
 4. **Anything that moves ships with a passing self-test** (sweep clear + must-jam control + measured gaps). No exceptions; it is the reason mechanisms are the strength of this skill.
 5. **Every print gets `forge preflight` before the slice**, and its verdict decides supports. NO-GO = fix geometry/orientation first. **Print-in-place / multi-body parts also get `forge export <stl>` and you hand over the 3MF, not the STL**: a slicer's auto supports fill the gaps and weld the parts (CYCLO-11's first print died that way), and an STL can't carry "supports off".
 6. **Environment:** Blender, OpenSCAD and GPU torch (text3d, looks) can crash inside some agent sandboxes that hide the GPU (Blender exits 139). If a step segfaults, run it outside the sandbox. Pure python (build123d, manifold3d, trimesh) runs anywhere.
-7. **Report milestones briefly** (route chosen, first render, print-ready with time/grams/verdict, blocker): one line each, say what the user must decide. Send key images (sheet.png, poster.png) and AR files when the channel supports files.
+7. **Report milestones briefly** (route chosen, first render, blocker): one line each, say what the user must decide. Print-ready = the Print Report (see "Finish every design"). Send key images (sheet.png, poster.png) and AR files when the channel supports files.
 8. Never start a print or spend money without the user's explicit OK. Downloaded models: respect the license (CC BY-NC = no selling).
 
 ## First use
@@ -123,6 +123,25 @@ Finish when verify passes every spec key, selftest passes (movers), preflight is
 5. Never start a print without the user's OK: "Bed clear? Starting <name>, ~<time>, <g> g."
 6. Report "<name> print-ready: <time>, <g> g, <verdict>." Selling? `forge showcase <dir>` writes mp4/gif + listing.md (cost, suggested price, license reminder).
 
+## Finish every design with the Print Report
+The last step of every finished design (custom part, mechanism, make/remix/flexify/text3d result) is `$FORGE/bin/forge report out/<name>` (or a plain `<file>.stl`). It collects the print-ready 3MF (supports decision baked in), `preview.png` (only if a render exists or Blender is installed), and `report.json`, and prints the table below already filled from tool output (preflight, selftest, fit.json, the slicer hook). Show the user that table verbatim in chat, with one sentence above it and nothing else; if you re-fill it from `report.json` instead, keep this exact shape, drop lines whose data is absent, and invent nothing:
+
+```
+**MOLD3D PRINT REPORT** · <name> · <W x D x H mm> · <printer>
+| | |
+|---|---|
+| Verdict | ✅ GO / ⚠️ GO + supports / ❌ NO-GO — supports ON/OFF |
+| Moving parts | <n>, all clear through full motion |
+| Gaps | <mm> (calibrated on your printer / default — print the Fit Card) |
+| Print | ~<time> · <grams> g |
+| Watch for | <top 1-2 issues in plain English> |
+| Files | `<path>.3mf` (print this) |
+```
+- Issues are plain English ("first-layer gap under 0.35" becomes "tight gap near the bed may fuse"); never paste preflight jargon or numbers you did not get from the report.
+- No `Print` row unless a slicer hook is set (grams are never estimated from volume). No `Moving parts` / `Gaps` rows for static parts.
+- NO-GO: no 3MF is written; fix the geometry and re-run `forge report`. Send `preview.png` when the channel supports files. If the report notes say previews are off, the install has no Blender: say so in one line, everything else still works.
+- The 3MF filename keeps the `_SUPPORTS-OFF` / `_SUPPORTS-ON` suffix (Rule 5): tell the user to open that file and check the Support box matches.
+
 ## PHASE 6 — FEEDBACK + LEARN
 1. One line after it prints: "What was off? (fit / looks / strength / print quality / nothing)". Read any photo.
 2. Gaps -> `forge fit set ...` (+ a row in fit-log.md). Other numbers -> fit-log.md / print-tolerances.md [V].
@@ -150,6 +169,7 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 | `sculpt` | SDF organic lane (gecko recipe in lib/sculpt.py) | watertight in 3 s |
 | `text3d "idea" [--base N] [--flexi] [--helmet]` | local text->concept->Hunyuan3D->printable figure + preflight + slice; `--helmet` = wearable 2-piece helmet | 4 figures ~3.5 min each; helmet v2 looks 5.3% vs egg 0.9% (the real prop scored 13.5%), 34.5 h / 742 g |
 | `preflight stl [--slice/--orient/--heat]`, `heat` | failure prediction: knife-edge contact, mid-air islands, bridges vs cantilevers, thin walls, fused PIP gaps, auto-support traps, tip-over |
+| `report <dir|stl> [--json]` | the Print Report: verdict, moving parts, gaps [V]/[R], time/grams, plain-English watch-fors, files; collects 3MF + preview + report.json | fitcard: GO, 9 movers clear |
 | `export stl [--supports on/off/auto] [--out f.3mf]` | 3MF carrying the supports checkbox into Orca/Bambu/AnkerMake/Prusa slicers; `_SUPPORTS-OFF`/`-ON` in the name | 4/4 known cases correct |
 | `looks stl --target "x"` | recognizability score (CLIP, clean renders) | ranked all 3 bench pairs like a human |
 | `split stl [--scale]` | bed-sized pieces, smallest seams, pins + engraved seam IDs, pins.stl | 290 mm dragon -> 6 pieces, 2 s |
@@ -193,4 +213,4 @@ Give up and switch when: 6 iterations without passing; same failure twice after 
 Habits that keep usage low: one sheet read per iteration, small scripts, deterministic tools over re-asking. No subagent fan-outs for CAD.
 
 ## File map
-`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, export3mf.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `out/<name>/`.
+`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, export3mf.py, report.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `out/<name>/`.

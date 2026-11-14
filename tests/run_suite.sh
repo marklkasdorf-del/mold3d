@@ -132,4 +132,15 @@ done
 k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_test 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['items'])")
 [ "${k:-0}" -ge 20 ] && ok "plate --fill packs $k keychains on one bed" || no "plate" "$k items"
 
+# 7 forge report: plain STL -> report.json with verdict + supports + files; bridge30 needs supports (3MF ON); fitcard-style mech.json folder adds moving parts
+mkdir -p "$T/rep"; cp "$T/bridge30.stl" "$T/rep/bridge30.stl"
+"$CAD" report.py "$T/rep/bridge30.stl" --no-preview --json > "$T/rep.log" 2>&1
+"$CAD" - "$T/rep" <<'PY' && ok "report: bridge30 -> GO+SUPPORTS, supports on, ON-3MF, plain-English watch-for, no invented print/moving rows" || no "report" "see $T/rep.log"
+import json, os, sys
+d = json.load(open(sys.argv[1] + '/report.json'))
+assert d['preflight']['verdict'] == 'GO+SUPPORTS' and d['preflight']['supports'] == 'on', d['preflight']
+assert d['files']['3mf'].endswith('bridge30_SUPPORTS-ON.3mf') and os.path.exists(d['files']['3mf'])
+assert 'moving_parts' not in d and 'slice' not in d and d['watch_for'], d
+PY
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]
