@@ -20,6 +20,7 @@ import trimesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import forge_env
 import meshkit as mk
 import fit
 from manifold3d import Manifold
@@ -317,7 +318,7 @@ if __name__ == "__main__":
     ap.add_argument("--no-align", action="store_true"); ap.add_argument("--name", default=None)
     a = ap.parse_args()
     name = a.name or os.path.splitext(os.path.basename(a.model))[0] + "_flexi"
-    out = a.out or os.path.join(os.path.dirname(HERE), "out", name)
+    out = a.out or os.path.join(forge_env.OUT, name)
     jx = [float(v) for v in a.joints_x.split(",")] if a.joints_x else None
     rep = run(a.model, out, a.spacing, a.theta, jx, not a.no_align, name=name)
     print(f"[{'PASS' if rep['ok'] else 'FAIL'}] {name}: {rep['segments']} segments, {rep['joints_n']} joints, "

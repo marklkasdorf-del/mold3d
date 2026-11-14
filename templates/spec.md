@@ -33,5 +33,5 @@ Anything with confidence "estimate" gets a TEST COUPON before the full part (Pha
 ## 8. Out of scope (protects existing work)
 - <e.g. do not change wall thickness while adding the cutout>
 
-## 9. Reference images (fetched via web search, saved to out/<name>/ref/)
+## 9. Reference images (fetched via web search, saved to mold3d/<name>/ref/)
 - <path or URL + what to compare>

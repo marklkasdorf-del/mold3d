@@ -3,8 +3,8 @@
 Core law (ModelRift benchmark): "Every defect that would have ruined a print was found by a number instead: a volume, an angle, an interference test." Renders work for massing, proportion and "the column is in the wrong place"; they fail for **wall thickness, clearance, and whether a boolean quietly deleted half your part.** Claude also cannot read an STL by itself — it "will tell you it can... it's just bullshitting you" (Dave Snider). Never describe a binary STL from memory; only from `verify.json` and the rendered PNGs.
 
 ## Per-iteration reading order (cost-aware: Pro plan)
-1. `forge/bin/forge run ...` finishes. Read **`out/<name>/REPORT.md` and `verify.json` first** (small, numeric).
-2. Read **`out/<name>/sheet.png` ONCE** (the contact sheet of all views). Do not open individual `views/*.png` unless the sheet leaves one question open (then open exactly that one).
+1. `forge/bin/forge run ...` finishes. Read **`mold3d/<name>/REPORT.md` and `verify.json` first** (small, numeric).
+2. Read **`mold3d/<name>/sheet.png` ONCE** (the contact sheet of all views). Do not open individual `views/*.png` unless the sheet leaves one question open (then open exactly that one).
 3. Write the critique in <= 8 lines using the checklist below. Decide ONE change. Edit. Re-run.
 Never judge from a single view (Snider: "Just because there's a box there, it doesn't mean it's visible"; ModelRift/cad-skill use 6 views).
 

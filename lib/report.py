@@ -61,6 +61,20 @@ def top_issues(issues, n=2):
 
 
 # ---------------------------------------------------------------- gathering
+def read_assumed(out_dir, stl):
+    """Numbers the design depends on that nobody confirmed. Convention: the design's spec.json has
+    "assumed": {"screw diameter": "M4", "phone width": "72 mm"}. Looked up next to the report, then next to the STL."""
+    for d in (out_dir, os.path.dirname(stl)):
+        p = os.path.join(d, "spec.json")
+        if os.path.exists(p):
+            a = (_jload(p) or {}).get("assumed")
+            if isinstance(a, dict) and a:
+                return {str(k): v for k, v in a.items()}
+            if isinstance(a, list) and a:
+                return {str(k): "" for k in a}
+    return {}
+
+
 def resolve(arg):
     p = os.path.abspath(arg)
     if os.path.isdir(p):
@@ -187,6 +201,7 @@ def gather(a):
                          "issues": [{k: i.get(k) for k in ("level", "code", "msg", "fix")} for i in R.get("issues", [])],
                          "notes": R.get("notes", []), "source": how}}
     rep["watch_for"] = top_issues(R.get("issues", []))
+    rep["assumed"] = read_assumed(out_dir, stl)
     if mech:
         rep["moving_parts"] = mech
         tag = fit.tag("pip_gap")
@@ -267,6 +282,8 @@ def markdown(rep):
     if sl:
         rows.append(("Print", " · ".join(x for x in ((f"~{sl['print_time']}" if sl.get("print_time") else None),
                                                       (f"{sl['grams']:g} g" if sl.get("grams") else None)) if x)))
+    if rep.get("assumed"):
+        rows.append(("Assumed", "; ".join(f"{k} {v}".strip() for k, v in rep["assumed"].items()) + " (not confirmed, check before you print)"))
     rows.append(("Watch for", "; ".join(rep["watch_for"]) if rep["watch_for"] else "nothing flagged by preflight"))
     f = rep["files"]
     if "3mf" in f:

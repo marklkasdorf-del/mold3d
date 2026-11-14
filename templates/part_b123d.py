@@ -6,6 +6,7 @@ Example part: a rounded tray with a corner screw hole and a chamfered (not fille
 import os, sys
 from build123d import *
 from b123d_checks import assert_solid, overlap_volume, min_distance   # forge/lib is on PYTHONPATH under `forge run`
+import fit   # the one clearance table for YOUR printer: never hard-code 0.3 / 3.4 / 0.15
 
 # ---------------- PARAMETERS (mm). Every number in the model derives from these. -------------
 LENGTH      = 80.0   # X
@@ -15,7 +16,8 @@ WALL        = 2.4    # >= 1.2 hard min, 2.0+ recommended; 2.4 = 6 perimeters at 
 FLOOR       = 2.4
 CORNER_R    = 4.0    # vertical-edge fillet (fine: vertical edges need no support)
 BOTTOM_CH   = 1.0    # chamfer on bed-side edges (NOT a fillet: fillets overhang <45deg at the bed)
-HOLE_D      = 3.4    # M3 clearance = 3.0 + 0.4 (see reference/print-tolerances.md)
+SCREW_D     = 3.0    # M3: the NOMINAL screw (a number to look up or confirm, never guess)
+HOLE_D      = SCREW_D + 2 * fit.get("hole_comp")   # FDM holes print small: hole_comp is added to the radius (fit.json, forge fit set)
 HOLE_INSET  = 8.0    # hole centre distance from each outer side
 EPS         = 0.01   # cutter overshoot so booleans never leave coplanar skins
 

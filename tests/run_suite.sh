@@ -143,4 +143,28 @@ assert d['files']['3mf'].endswith('bridge30_SUPPORTS-ON.3mf') and os.path.exists
 assert 'moving_parts' not in d and 'slice' not in d and d['watch_for'], d
 PY
 
+# 8 first-five-minutes: the forge CLI from a DIFFERENT folder (relative paths, default output dir, help, doctor cache, Assumed row)
+FG="$F/bin/forge"; W="$T/cwd"; rm -rf "$W"; mkdir -p "$W"; cp "$T/bridge30.stl" "$W/part.stl"
+v=$(cd "$W" && "$FG" preflight part.stl 2>&1 | head -1)
+case "$v" in "[GO+SUPPORTS] part.stl"*) ok "forge preflight with a RELATIVE path from another folder -> GO+SUPPORTS";; *) no "relative preflight" "got: $v";; esac
+(cd "$W" && "$FG" export part.stl --out relout.3mf >/dev/null 2>&1; "$FG" split part.stl --out relsplit >/dev/null 2>&1)
+[ -f "$W/relout.3mf" ] && [ -d "$W/relsplit" ] && ok "relative --out paths land in the caller's folder (export, split)" || no "relative --out" "$(ls "$W")"
+e=$(cd "$W" && "$FG" preflight nothere.stl 2>&1); echo "$e" | grep -q "file not found" && ! echo "$e" | grep -q Traceback && ok "missing file -> one plain line, no traceback" || no "missing file" "$e"
+e=$(cd "$W" && "$FG" preflgiht part.stl 2>&1); echo "$e" | grep -q "Did you mean 'preflight'" && ok "typo'd command -> 'Did you mean preflight'" || no "typo" "$e"
+n=$("$FG" --help | grep -cE '^  [a-z0-9-]+ +[^ ]'); [ "$n" -ge 24 ] && ok "forge --help lists $n commands" || no "forge --help" "$n commands"
+rm -rf "$W/mold3d"; (cd "$W" && env -u MOLD3D_OUT -u FORGE_OUT "$FG" sculpt >/dev/null 2>&1; env -u MOLD3D_OUT -u FORGE_OUT "$FG" make keychain HI >/dev/null 2>&1)
+[ -f "$W/mold3d/make/keychain_HI/keychain.stl" ] && ok "default output is ./mold3d/<name>/ in the caller's folder" || no "default out dir" "$(find "$W" -maxdepth 3 | head)"
+mkdir -p "$W/elsewhere"; (cd "$W" && MOLD3D_OUT="$W/elsewhere" "$FG" make keychain HI >/dev/null 2>&1)
+[ -f "$W/elsewhere/make/keychain_HI/keychain.stl" ] && ok "MOLD3D_OUT overrides the output folder" || no "MOLD3D_OUT" "$(ls "$W/elsewhere")"
+export MOLD3D_CACHE="$T/doctor_cache"; rm -rf "$MOLD3D_CACHE"
+"$FG" doctor --fresh >/dev/null 2>&1; s=$(python3 -c "import time;print(time.time())"); "$FG" doctor > "$T/doctor2.log" 2>&1
+dt=$(python3 -c "import time;print(round(time.time()-$s,2))")
+grep -q "cached result" "$T/doctor2.log" && python3 -c "import sys;sys.exit(0 if $dt < 3 else 1)" && ok "forge doctor: second run is a cache hit (${dt}s)" || no "doctor cache" "${dt}s, $(tail -2 "$T/doctor2.log")"
+unset MOLD3D_CACHE
+mkdir -p "$T/asm"; cp "$T/bridge30.stl" "$T/asm/bridge30.stl"
+echo '{"assumed": {"screw size": "M4", "phone width": "72 mm"}}' > "$T/asm/spec.json"
+"$CAD" report.py "$T/asm/bridge30.stl" --no-preview --no-export > "$T/asm.log" 2>&1
+grep -q "^| Assumed | screw size M4; phone width 72 mm" "$T/asm.log" && ok "report: spec.json 'assumed' -> an Assumed row" || no "report Assumed row" "$(cat "$T/asm.log")"
+grep -q "^| Assumed" "$T/rep.log" && no "report: no assumed values -> no Assumed row" "row shown" || ok "report: nothing assumed -> no Assumed row"
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

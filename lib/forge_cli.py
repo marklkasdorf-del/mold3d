@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """forge <run|doctor|preflight|export|report|...> ...   (see bin/forge --help)
 run <part_file> [--lane b123d|scad|bpy] [--spec spec.json] [--name N] [--no-render] [--section z=5] [--ref img] [--eevee]
-  -> out/<name>/{<name>.stl, views/, sheet.png, verify.json, REPORT.md, src.*, iter_NN/}. Exit 1 on FAIL."""
-import argparse, json, os, shutil, subprocess, sys, shlex
+  -> ./mold3d/<name>/{<name>.stl, views/, sheet.png, verify.json, REPORT.md, src.*, iter_NN/}. Exit 1 on FAIL."""
+import argparse, json, os, shutil, subprocess, sys, shlex, time, io, contextlib, difflib
 HERE = os.path.dirname(os.path.abspath(__file__))
 FORGE = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
@@ -10,6 +10,9 @@ import forge_env
 import verify_lib as V
 
 CAD_PY = forge_env.CAD_PY
+# Designs go to ./mold3d/<name>/ in the directory forge was started from (override: $MOLD3D_OUT).
+# Exported so every child process (which runs with cwd=lib/) writes to the same place.
+os.environ["MOLD3D_OUT"] = forge_env.OUT
 OPENSCAD = forge_env.find_openscad() or "openscad"
 
 HINTS = {
@@ -66,16 +69,19 @@ def next_iter(d):
 def cmd_run(a):
     part = os.path.abspath(a.part)
     if not os.path.exists(part): sys.exit(f"forge: no such part file {part}")
+    if a.ref: a.ref = os.path.abspath(a.ref)
     lane = lane_of(part, a.lane)
     name = a.name or os.path.splitext(os.path.basename(part))[0]
-    od = os.path.join(FORGE, "out", name); os.makedirs(od, exist_ok=True)
+    od = os.path.join(forge_env.OUT, name); os.makedirs(od, exist_ok=True)
     for stale in ("views", "parts"): shutil.rmtree(os.path.join(od, stale), ignore_errors=True)
     for f in ("sheet.png", "verify.json", "REPORT.md"):
         if os.path.exists(os.path.join(od, f)): os.remove(os.path.join(od, f))
     stl = os.path.join(od, name + ".stl"); parts = os.path.join(od, "parts")
     if os.path.exists(stl): os.remove(stl)
     os.makedirs(parts, exist_ok=True)
+    if a.spec and not os.path.isfile(a.spec): sys.exit(f"forge: no such spec file {os.path.abspath(a.spec)}")
     spec = json.load(open(a.spec)) if a.spec else {}
+    if a.spec and os.path.abspath(a.spec) != os.path.join(od, "spec.json"): shutil.copy(a.spec, os.path.join(od, "spec.json"))   # forge report reads `assumed` from here
     run_lane(lane, part, stl, parts, os.path.join(od, "build.log"))
     try:
         sys.argv = ["clean", stl]
@@ -98,7 +104,7 @@ def cmd_run(a):
         os.remove(summ)
         render_ok = p.returncode == 0 and os.path.exists(os.path.join(od, "sheet.png"))
         if not render_ok:
-            rows.append(V.row("render", "FAIL", None, "previews are off (Blender isn't installed or didn't start). Everything else works. See out/%s/render.log; exit 139 = Blender crashed (re-run outside an agent sandbox)" % name))
+            rows.append(V.row("render", "FAIL", None, "previews are off (Blender isn't installed or didn't start). Everything else works. See %s/render.log; exit 139 = Blender crashed (re-run outside an agent sandbox)" % od))
             print(p.stdout[-800:], p.stderr[-800:])
     res["status"] = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
     res["lane"] = lane; res["name"] = name
@@ -129,7 +135,7 @@ def cmd_run(a):
     sys.exit(1 if res["status"] == "FAIL" else 0)
 
 
-def cmd_doctor(a):
+def _doctor_body():
     ok = True
     def chk(label, good, fix="", required=True, off=None):
         nonlocal ok
@@ -177,6 +183,43 @@ def cmd_doctor(a):
     print("  [info] fit.json:", "calibrated" if os.path.exists(fj) else "NOT calibrated yet -> print the Fit Card (forge mech build fitcard)")
     print("\n" + ("all required dependencies present" if ok else "some required dependencies missing (see fixes above)"))
     print("note: Blender / OpenSCAD / GPU (MPS, CUDA) steps can crash inside agent sandboxes; run them outside one.")
+    return ok
+
+
+DOCTOR_TTL = 24 * 3600
+
+
+def _doctor_cache_path():
+    base = os.environ.get("MOLD3D_CACHE") or os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "mold3d")
+    return os.path.join(base, "doctor.json")
+
+
+def cmd_doctor(a):
+    """Full check takes ~20 s (it launches Blender), so a passing result is cached for 24 h. --fresh forces a re-check."""
+    cp = _doctor_cache_path()
+    key = {"root": FORGE, "cad_py": CAD_PY, "blender": os.environ.get("BLENDER", ""), "printer": os.environ.get("FORGE_PRINTER", "")}
+    if not a.fresh:
+        try:
+            c = json.load(open(cp))
+            age = time.time() - c["time"]
+            if c.get("key") == key and c.get("ok") and 0 <= age < DOCTOR_TTL:
+                print(c["text"], end="")
+                print(f"\n(cached result from {int(age // 60)} min ago, good for 24 h. Re-check: forge doctor --fresh)")
+                sys.exit(0)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    buf = io.StringIO()
+    class Tee:
+        def write(self, t): buf.write(t); return sys.__stdout__.write(t)
+        def flush(self): sys.__stdout__.flush()
+    with contextlib.redirect_stdout(Tee()):
+        ok = _doctor_body()
+    if ok:
+        try:
+            os.makedirs(os.path.dirname(cp), exist_ok=True)
+            json.dump({"time": time.time(), "ok": True, "key": key, "text": buf.getvalue()}, open(cp, "w"))
+        except OSError:
+            pass
     sys.exit(0 if ok else 1)
 
 
@@ -230,38 +273,133 @@ def cmd_heat(rest):
     print("heat ->", png.replace(".png", "_iso.png"), png.replace(".png", "_under.png")); sys.exit(r.returncode)
 
 
+# ---------------------------------------------------------------- argument handling
+# Every sub-script runs with cwd=lib/, so a path the user typed relative to THEIR folder must be made absolute first.
+FILE_EXT = (".stl", ".3mf", ".step", ".stp", ".obj", ".ply", ".glb", ".usdz", ".json", ".jpg", ".jpeg", ".png", ".heic", ".pdf", ".py", ".scad", ".gcode")
+PATH_FLAGS = ("--out", "--output", "-o", "--parts", "--spec", "--ref", "--dst", "--json")   # values are paths even if they don't exist yet
+INPUT_CMDS = ("preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
+
+
+def absargs(cmd, rest):
+    """Make every path argument absolute (relative to the caller's cwd); fail plainly if an input file is missing."""
+    out, flag_val = [], False
+    first_input = True
+    for x in rest:
+        if flag_val:
+            out.append(os.path.abspath(x)); flag_val = False; continue
+        if x in PATH_FLAGS:
+            out.append(x); flag_val = True; continue
+        if x.startswith("-") and "=" in x and x.split("=", 1)[0] in PATH_FLAGS:
+            k, v = x.split("=", 1); out.append(k + "=" + os.path.abspath(v)); continue
+        if x.startswith("-"):
+            out.append(x); continue
+        looks_like_path = os.sep in x or x.lower().endswith(FILE_EXT)
+        if cmd in INPUT_CMDS and x.lower().endswith(FILE_EXT) and not os.path.exists(x) and (first_input or cmd == "plate"):
+            sys.exit(f"forge {cmd}: file not found: {os.path.abspath(x)}  (paths are relative to {os.getcwd()})")
+        if os.path.exists(x) and (looks_like_path or (cmd in INPUT_CMDS and first_input)):
+            out.append(os.path.abspath(x))
+        else:
+            out.append(x)
+        first_input = False
+    return out
+
+
+COMMANDS = [
+    ("Make something", [
+        ("make", "box | keychain | sign | stand | holder | lithophane from your numbers (clearances from fit.json)"),
+        ("remix", "<stl> text | keychain | magnets | thicken | fit-head | flat | mirror | scale: upgrade a download"),
+        ("plate", "<stl...> --fill | --copies N: pack the bed, per-item cost"),
+        ("mech", "list | build <name> | test | ratio: verified print-in-place mechanisms (fitcard, gyro, planetary, balisong...)"),
+        ("flexify", "<stl>: turn any creature mesh into a print-in-place flexi"),
+        ("sculpt", "[out.stl]: SDF organic-body lane (gecko recipe)"),
+        ("text3d", "\"idea\" [--base N] [--flexi] [--helmet]: local text-to-3D figure (needs the AI env)"),
+        ("gridfinity", "bin | base: Gridfinity bins and baseplates to spec"),
+        ("run", "<part.py|.scad> [--spec spec.json] [--name N]: build your own code-CAD part, verify, render"),
+    ]),
+    ("Will it print?", [
+        ("preflight", "<stl> [--orient] [--slice]: verdict (GO / GO+SUPPORTS / NO-GO) and the supports decision"),
+        ("heat", "<stl>: red/yellow support heatmap"),
+        ("movecheck", "<stl|3mf>: bodies, per-joint gap, fuse risk"),
+        ("split", "<stl>: cut a too-big model into bed-sized pieces with pins"),
+        ("fit", "show | set <key> <mm> --from \"...\": the one clearance table for your printer"),
+    ]),
+    ("Hand off", [
+        ("report", "<dir|stl>: the Print Report (verdict, gaps, time, files) plus the print-ready 3MF"),
+        ("export", "<stl> [--supports on|off|auto]: 3MF that carries the supports checkbox into your slicer"),
+        ("ar", "<stl>: real-size AR preview (USDZ for iPhone/Vision Pro, GLB for Quest)"),
+        ("showcase", "<dir|stl>: video + GIF + listing kit"),
+    ]),
+    ("Find real dimensions", [
+        ("parts-find", "\"M3 socket head 12\" [--download]: look up screws, bearings, motors, boards"),
+        ("step2stl", "<in.step> [out.stl]: STEP to STL dummy for fit checks"),
+        ("photofit", "mat | <photo.jpg>: calibration mat, then an exact outline of an object from a photo"),
+        ("topo", "<part.step>: addressable faces and holes"),
+        ("looks", "<stl> --target \"x\": recognizability score (needs the AI env)"),
+        ("grade", "<attempt.stl> <truth.stl>: shape match vs a reference mesh"),
+    ]),
+    ("Setup", [
+        ("doctor", "[--fresh]: check the install (result cached for 24 h)"),
+    ]),
+]
+
+
+def print_help():
+    print("forge: Mold3D command line.  usage: forge <command> [args]   (forge <command> --help for details)\n")
+    for title, cmds in COMMANDS:
+        print(title)
+        for n, d in cmds:
+            print(f"  {n:<11} {d}")
+        print()
+    print("Designs are written to ./mold3d/<name>/ in the folder you run forge from (set $MOLD3D_OUT to change).")
+    print("Paths you type are relative to your current folder.")
+
+
+ALL_CMDS = [n for _, cs in COMMANDS for n, _ in cs]
+
+
 NEW = {
     "mech": cmd_mech,
     "fit": lambda r: _cad("fit.py", r or ["show"]),
     "flexify": lambda r: _cad("flexify.py", r),
     "preflight": lambda r: _cad("preflight.py", r),
     "heat": cmd_heat,
-    "report": lambda r: _cad("report.py", [os.path.abspath(r[0])] + r[1:] if r and not r[0].startswith("-") else r),
-    "export": lambda r: _cad("export3mf.py", [os.path.abspath(x) if i == 0 or (i and r[i - 1] == "--out") else x for i, x in enumerate(r)]),
+    "report": lambda r: _cad("report.py", r),
+    "export": lambda r: _cad("export3mf.py", r),
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),
     "ar": lambda r: _cad("ar.py", r),
-    "showcase": lambda r: _cad("showcase.py", ([os.path.abspath(r[0])] + r[1:]) if r else r),
+    "showcase": lambda r: _cad("showcase.py", r),
     "gridfinity": lambda r: _cad("gridfinity.py", r),
     "photofit": lambda r: _cad("photofit.py", r),
     "split": lambda r: _cad("split.py", r),
     "sculpt": lambda r: _cad("sculpt.py", r),
     "looks": lambda r: sys.exit(subprocess.run([HG_PY, os.path.join(HERE, "looks.py")] + r, cwd=HERE).returncode),
-    "remix": lambda r: _cad("remix.py", [os.path.abspath(r[0])] + r[1:] if r else []),
+    "remix": lambda r: _cad("remix.py", r),
     "make": lambda r: _cad("make.py", r),
-    "plate": lambda r: _cad("plate.py", [os.path.abspath(x) if x.endswith((".stl", ".3mf")) else x for x in r]),
+    "plate": lambda r: _cad("plate.py", r),
+    "topo": cmd_topo, "parts-find": cmd_parts_find, "step2stl": cmd_step2stl, "movecheck": cmd_movecheck, "grade": cmd_grade,
 }
 
-if len(sys.argv) > 1 and sys.argv[1] in ("topo", "parts-find", "step2stl", "movecheck", "grade"):
-    {"topo": cmd_topo, "parts-find": cmd_parts_find, "step2stl": cmd_step2stl, "movecheck": cmd_movecheck,
-     "grade": cmd_grade}[sys.argv[1]](sys.argv[2:])
-if len(sys.argv) > 1 and sys.argv[1] in NEW:
-    NEW[sys.argv[1]](sys.argv[2:])
 
-ap = argparse.ArgumentParser(prog="forge", epilog="also: topo | parts-find | step2stl | movecheck | grade | mech | fit | "
-                             "flexify | preflight | export | report | heat | text3d | ar | showcase | gridfinity | photofit | split | sculpt | looks | remix | make | plate")
-sub = ap.add_subparsers(dest="cmd", required=True)
-r = sub.add_parser("run"); r.add_argument("part"); r.add_argument("--lane", choices=["b123d", "scad", "bpy"]); r.add_argument("--spec"); r.add_argument("--name")
-r.add_argument("--no-render", action="store_true"); r.add_argument("--section"); r.add_argument("--ref"); r.add_argument("--eevee", action="store_true")
-sub.add_parser("doctor")
-a = ap.parse_args()
-cmd_run(a) if a.cmd == "run" else cmd_doctor(a)
+def main():
+    argv = sys.argv[1:]
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print_help(); sys.exit(0)
+    cmd = argv[0]
+    if cmd in NEW:
+        NEW[cmd](absargs(cmd, argv[1:]))
+    elif cmd in ("run", "doctor"):
+        ap = argparse.ArgumentParser(prog="forge " + cmd)
+        if cmd == "run":
+            ap.add_argument("part"); ap.add_argument("--lane", choices=["b123d", "scad", "bpy"]); ap.add_argument("--spec"); ap.add_argument("--name")
+            ap.add_argument("--no-render", action="store_true"); ap.add_argument("--section"); ap.add_argument("--ref"); ap.add_argument("--eevee", action="store_true")
+        else:
+            ap.add_argument("--fresh", action="store_true", help="ignore the 24 h cache and re-check everything (slow: launches Blender)")
+        a = ap.parse_args(argv[1:])
+        cmd_run(a) if cmd == "run" else cmd_doctor(a)
+    else:
+        near = difflib.get_close_matches(cmd, ALL_CMDS, n=1)
+        sys.exit(f"forge: unknown command '{cmd}'." + (f" Did you mean '{near[0]}'?" if near else "") + " Run `forge --help` for the list.")
+
+
+if __name__ == "__main__":
+    main()

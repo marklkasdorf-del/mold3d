@@ -15,6 +15,7 @@ import trimesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import forge_env
 import meshkit as mk
 import fit
 import printer
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     ap.add_argument("--pins", default="printed", choices=["printed", "filament", "none"])
     ap.add_argument("--max-pieces", type=int, default=12); ap.add_argument("--out")
     a = ap.parse_args()
-    out = a.out or os.path.join(os.path.dirname(HERE), "out", "split_" + os.path.splitext(os.path.basename(a.model))[0])
+    out = a.out or os.path.join(forge_env.OUT, "split_" + os.path.splitext(os.path.basename(a.model))[0])
     rep = run(a.model, out, tuple(float(v) for v in a.bed.split(",")) if a.bed else None, a.scale, a.pins, a.max_pieces)
     print(f"{len(rep['pieces'])} pieces, {len(rep['seams'])} seams, {rep['pins_total']} {rep['pin_type']} pins -> {out}")
     for p in rep["pieces"]:

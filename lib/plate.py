@@ -5,7 +5,7 @@
 --copies N : N of each part.   --fill : as many of the (first) part as fit.   --slice : slicer hook -> time, grams,
              and per-item cost (shop brain). Parts keep their print pose (flat side down); only rotate about Z.
 Packing: each part is turned about Z to its smallest footprint, then shelf-packed largest-first into the usable bed area
-(5 mm margin). Writes out/plate/<name>/plate.stl + plate.png (top view).
+(5 mm margin). Writes mold3d/plate/<name>/plate.stl + plate.png (top view).
 """
 import argparse, json, math, os, subprocess, sys
 import numpy as np
@@ -13,7 +13,7 @@ import trimesh
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FORGE = os.path.dirname(HERE)
-import printer
+import printer, forge_env
 _B = printer.bed()
 BEDX, BEDY = _B[0] - 10.0, _B[1] - 10.0     # usable area = bed minus a 5 mm margin per side
 
@@ -86,7 +86,7 @@ def main():
     allm = trimesh.util.concatenate(plate)
     allm.apply_translation([-_B[0] / 2, -_B[1] / 2, 0])                       # bed centre at the origin
     name = a.name or os.path.splitext(os.path.basename(a.parts[0]))[0] + (f"_x{len(plate)}")
-    d = os.path.join(FORGE, "out", "plate", name); os.makedirs(d, exist_ok=True)
+    d = os.path.join(forge_env.OUT, "plate", name); os.makedirs(d, exist_ok=True)
     f = os.path.join(d, "plate.stl"); allm.export(f)
     # top-view preview
     from PIL import Image, ImageDraw

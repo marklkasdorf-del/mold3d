@@ -9,16 +9,17 @@
   forge make lithophane photo.jpg [--width 100] [--frame]
   forge make devices                        (list the device library: knowledge/devices.json)
 Boxes are checked like mechanisms: a slide lid must slide all the way out clear AND jam if you try to lift it.
-Output: out/make/<thing>/ with STLs already in their PRINT pose + a one-line recipe.
+Output: ./mold3d/make/<thing>/ with STLs already in their PRINT pose + a one-line recipe.
 """
 import argparse, json, math, os, sys
 from build123d import *
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import forge_env
 import fit
 FORGE = os.path.dirname(HERE)
-OUT = os.path.join(FORGE, "out", "make")
+OUT = os.path.join(forge_env.OUT, "make")
 DEV = os.path.join(FORGE, "knowledge", "devices.json")
 WALL = 2.0                     # minimum wall (mm)
 FONT = "Arial Black"

@@ -13,6 +13,10 @@ smooth k 2-5 mm reads organic, k 0 reads mechanical; step 0.2-0.3 for prints (0.
 """
 import numpy as np
 import trimesh
+try:
+    import sdf as _sdf  # noqa: F401
+except ImportError:
+    raise SystemExit("forge sculpt: the SDF lane needs the `sdf` package: pip install git+https://github.com/fogleman/sdf.git  (everything else works without it)")
 from sdf import *   # noqa: F401,F403  (sphere, ellipsoid, capsule, capped_cone, union, intersection, slab, ...)
 from sdf import union, intersection, difference, slab, sphere, ellipsoid, capsule, capped_cone
 
@@ -56,8 +60,8 @@ def gecko(length_scale=1.0, k=2.5):
 
 
 if __name__ == "__main__":
-    import sys, os
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "out", "gecko", "gecko.stl")
+    import sys, os, forge_env
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(forge_env.OUT, "gecko", "gecko.stl")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     t = to_mesh(gecko(), step=0.25)
     t.export(out)

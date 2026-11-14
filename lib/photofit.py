@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """photofit: phone photo of an object on the Calibration Mat -> exact outline in mm -> custom-fit Gridfinity bin / tray.
 
-    forge photofit mat                       # writes out/photofit/calibration_mat_letter.pdf (print at 100% / "Actual size")
+    forge photofit mat                       # writes mold3d/photofit/calibration_mat_letter.pdf (print at 100% / "Actual size")
     forge photofit photo.jpg [--depth 15] [--bin auto|NxM] [--name thing]
 How: 4 ArUco markers at known spots -> homography -> top-down image at 8 px/mm -> object = what isn't paper
 (colour distance + darkness, shadows suppressed) -> biggest blob inside the work area -> contour in mm -> pocket.
@@ -14,8 +14,9 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import forge_env
 FORGE = os.path.dirname(HERE)
-OUT = os.path.join(FORGE, "out", "photofit")
+OUT = os.path.join(forge_env.OUT, "photofit")
 
 PAGE = (215.9, 279.4)              # US Letter, mm
 MK = 28.0                          # marker side, mm

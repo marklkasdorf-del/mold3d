@@ -3,7 +3,7 @@
   FORGE_ROOT     skill directory (default: parent of lib/)
   FORGE_CAD_PY   python with build123d + trimesh + manifold3d ...   (default: $FORGE_ROOT/.venv-cad/bin/python, else sys.executable)
   FORGE_AI_PY    python with torch + diffusers + transformers ...   (default: $FORGE_ROOT/.venv-ai/bin/python, else FORGE_CAD_PY)
-  FORGE_OUT      where builds are written                           (default: $FORGE_ROOT/out)
+  MOLD3D_OUT     where designs are written (FORGE_OUT also works)    (default: ./mold3d in the directory you run forge from)
   FORGE_PRINTER  path to a printer profile json                     (default: knowledge/printer.json)
   BLENDER        Blender binary (default: auto-detect)
   OPENSCAD       OpenSCAD binary (default: auto-detect)
@@ -12,7 +12,7 @@ import os, sys, shutil
 
 LIB = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.environ.get("FORGE_ROOT") or os.path.dirname(LIB)
-OUT = os.environ.get("FORGE_OUT") or os.path.join(ROOT, "out")
+OUT = os.path.abspath(os.environ.get("MOLD3D_OUT") or os.environ.get("FORGE_OUT") or os.path.join(os.getcwd(), "mold3d"))
 
 
 def _venv_py(name):

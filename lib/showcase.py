@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """showcase: video + GIF + listing kit for any model or mechanism (needs Blender).
 
-    forge showcase out/gyro            # mechanism folder (mech.json + parts/): plays the VERIFIED motion
+    forge showcase mold3d/gyro           # mechanism folder (mech.json + parts/): plays the VERIFIED motion
     forge showcase model.stl           # single model: turntable
     options: --frames 72 --w 720 --h 540 --motion NAME --turntable --price-per-kg 20
     studio look (Cycles, needs Blender): --style studio|paper  --accent PART[,PART]  --ghost PART  --section x|y|z=VAL  --explode

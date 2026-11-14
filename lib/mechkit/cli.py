@@ -1,9 +1,9 @@
 """forge mech list | build <name> [k=v ...] [--out DIR] | test [names...] | ratio <name> [k=v ...] [--motion M] [--driven P] [--driver P] [--declared X]
 
 build: builds the mechanism with fit.json clearances, runs the self-test, exports parts/*.stl + <name>.stl + mech.json
-       to <skill>/out/<name>/ (render with bin/render, slice with your slicer).
+       to ./mold3d/<name>/ (or $MOLD3D_OUT) (render with bin/render, slice with your slicer).
 ratio: MEASURES the reduction ratio and backlash from the geometry (no declared numbers): poses 24 drive values, frees the
-       driven part and bisects for the contact-free angle interval. Writes out/<name>/ratio.json. Exit 3 if it differs from the
+       driven part and bisects for the contact-free angle interval. Writes mold3d/<name>/ratio.json. Exit 3 if it differs from the
        declared ratio by > 0.5 %.   e.g. forge mech ratio cyclo11     forge mech ratio planetary --motion mesh --driven ring --driver sun
 test : builds + self-tests every registered mechanism; writes knowledge/mechkit-tests.json (the MechKit scoreboard).
 """
@@ -11,6 +11,7 @@ import importlib, json, os, sys, time, datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+import forge_env
 FORGE = os.path.dirname(os.path.dirname(HERE))
 
 REGISTRY = {
@@ -46,7 +47,7 @@ def build_one(name, kw=None, out=None, verbose=True):
     t = time.time()
     m = mod.build(**(kw or {}))
     rep = core.selftest(m, verbose=verbose)
-    out = out or os.path.join(FORGE, "out", name)
+    out = out or os.path.join(forge_env.OUT, name)
     stl = core.export(m, out)
     rep["seconds"] = round(time.time() - t, 1)
     rep["stl"] = os.path.relpath(stl, FORGE)       # relative: selftest.json is shareable
@@ -67,7 +68,7 @@ def ratio_one(name, kw, out=None, motion="reduce", driven="carrier", driver="sha
     r["seconds"] = round(time.time() - t, 1)
     r["name"] = m.name
     r["match"] = abs(r["measured"] - r["declared"]) <= 0.005 * abs(r["declared"])
-    out = out or os.path.join(FORGE, "out", name)
+    out = out or os.path.join(forge_env.OUT, name)
     os.makedirs(out, exist_ok=True)
     json.dump(r, open(os.path.join(out, "ratio.json"), "w"), indent=1)
     return r

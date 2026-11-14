@@ -13,6 +13,7 @@ from build123d import *
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import forge_env
 import fit
 
 GRID, BIN, HU = 42.0, 41.5, 7.0
@@ -106,11 +107,11 @@ def main():
         nx, ny, nz = (a.dims + [1, 1, 3])[:3] if len(a.dims) >= 3 else (a.dims + [1, 3])[:3]
         cut = json.load(open(a.cutout)) if a.cutout else None
         s = bin_(nx, ny, nz, a.magnets, a.divs, a.label, cut, a.depth, not a.no_lip)
-        name = a.out or os.path.join(os.path.dirname(HERE), "out", "gridfinity", f"bin_{nx}x{ny}x{nz}{'_cut' if cut else ''}.stl")
+        name = a.out or os.path.join(forge_env.OUT, "gridfinity", f"bin_{nx}x{ny}x{nz}{'_cut' if cut else ''}.stl")
     else:
         nx, ny = (a.dims + [a.dims[0]])[:2]
         s = baseplate(nx, ny)
-        name = a.out or os.path.join(os.path.dirname(HERE), "out", "gridfinity", f"base_{nx}x{ny}.stl")
+        name = a.out or os.path.join(forge_env.OUT, "gridfinity", f"base_{nx}x{ny}.stl")
     os.makedirs(os.path.dirname(name), exist_ok=True)
     export_stl(s, name, tolerance=0.01, angular_tolerance=0.1)
     bb = s.bounding_box().size
