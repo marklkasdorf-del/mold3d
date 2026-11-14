@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""verify <stl> [--spec spec.json] [--json]  |  verify --orient <stl> [--angle 45]  |  verify --assembly a.stl b.stl [--clearance 0.2] [--move-a x,y,z] [--move-b x,y,z] [--no-contact]
+"""verify <stl> [--spec spec.json] [--json] [--raw]  |  verify --orient <stl> [--angle 45]  |  verify --assembly a.stl b.stl [--clearance 0.2] [--move-a x,y,z] [--move-b x,y,z] [--no-contact]
 Exit 0 = PASS/WARN, 1 = FAIL, 2 = usage/load error."""
 import argparse, json, sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -22,6 +22,7 @@ def main():
     ap.add_argument("--move-b", type=vec, default=(0, 0, 0), help="translate B (mm) into assembled pose, e.g. -70,0,22")
     ap.add_argument("--no-contact", action="store_true", help="treat touching surfaces as gap=0 (fail clearance)")
     ap.add_argument("--json", action="store_true", help="print only JSON")
+    ap.add_argument("--raw", action="store_true", help="the engineering table (name / value / detail) instead of plain words")
     ap.add_argument("--out", help="also write JSON here")
     a = ap.parse_args()
     try:
@@ -32,7 +33,7 @@ def main():
             res = V.assembly(a.assembly[0], a.assembly[1], a.clearance, a.move_a, a.move_b, allow_contact=not a.no_contact)
         elif a.stl:
             spec = json.load(open(a.spec)) if a.spec else {}
-            res = V.verify(a.stl, spec)
+            res = V.verify(a.stl, spec, spec_dir=os.path.dirname(os.path.abspath(a.spec)) if a.spec else None)
         else:
             ap.error("need an STL or --assembly A B")
     except Exception as e:  # never silently pass
@@ -40,7 +41,7 @@ def main():
         sys.exit(2)
     if a.out:
         json.dump(res, open(a.out, "w"), indent=1, default=str)
-    print(json.dumps(res, indent=1, default=str) if a.json else V.format_text(res))
+    print(json.dumps(res, indent=1, default=str) if a.json else (V.format_text(res) if a.raw or "summary" not in res else V.format_plain(res)))
     sys.exit(1 if res["status"] == "FAIL" else 0)
 
 

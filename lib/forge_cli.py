@@ -88,7 +88,7 @@ def cmd_run(a):
         import clean_stl; clean_stl.clean(stl)
     except Exception as e:
         print("forge: clean step failed (continuing, verify will tell):", e)
-    res = V.verify(stl, spec)
+    res = V.verify(stl, spec, spec_dir=os.path.dirname(os.path.abspath(a.spec)) if a.spec else None)
     rows = res["checks"]
     # --- render
     render_ok = True
@@ -106,13 +106,18 @@ def cmd_run(a):
         if not render_ok:
             rows.append(V.row("render", "FAIL", None, "previews are off (Blender isn't installed or didn't start). Everything else works. See %s/render.log; exit 139 = Blender crashed (re-run outside an agent sandbox)" % od))
             print(p.stdout[-800:], p.stderr[-800:])
+    V.plain_rows(rows, spec)
     res["status"] = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
+    res["summary"] = {"green": sum(1 for r in rows if r["status"] == "PASS"), "total": len(rows), "not_green": [r["plain"] for r in rows if r["status"] != "PASS"]}
     res["lane"] = lane; res["name"] = name
     json.dump(res, open(os.path.join(od, "verify.json"), "w"), indent=1, default=str)
     # --- report
     L = [f"# forge report: {name}", "", f"**{res['status']}** | lane `{lane}` | bbox {res['info']['bbox_mm']} mm | vol {res['info']['volume_mm3']} mm3 | ~{res['info']['mass_g_pla']} g PLA", "",
-         "| check | status | value | detail |", "|---|---|---|---|"]
+         f"## Checks: {res['summary']['green']} of {res['summary']['total']} green", ""]
+    for r in rows: L.append(f"- {r['status']}  {r['plain']}")
+    L += ["", "<details><summary>numbers</summary>", "", "| check | status | value | detail |", "|---|---|---|---|"]
     for r in rows: L.append(f"| {r['name']} | {r['status']} | {r['value']} | {r['detail']} |")
+    L.append("</details>")
     L += ["", "## Next step"]
     bad = [r for r in rows if r["status"] in ("FAIL", "WARN")]
     if not bad:
@@ -277,7 +282,7 @@ def cmd_heat(rest):
 # Every sub-script runs with cwd=lib/, so a path the user typed relative to THEIR folder must be made absolute first.
 FILE_EXT = (".stl", ".3mf", ".step", ".stp", ".obj", ".ply", ".glb", ".usdz", ".json", ".jpg", ".jpeg", ".png", ".heic", ".pdf", ".py", ".scad", ".gcode")
 PATH_FLAGS = ("--out", "--output", "-o", "--parts", "--spec", "--ref", "--dst", "--json")   # values are paths even if they don't exist yet
-INPUT_CMDS = ("preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
+INPUT_CMDS = ("verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
 
 
 def absargs(cmd, rest):
@@ -317,6 +322,7 @@ COMMANDS = [
         ("run", "<part.py|.scad> [--spec spec.json] [--name N]: build your own code-CAD part, verify, render"),
     ]),
     ("Will it print?", [
+        ("verify", "<stl> [--spec spec.json]: every requirement as PASS/FAIL in plain words, 'N of N green'"),
         ("preflight", "<stl> [--orient] [--slice]: verdict (GO / GO+SUPPORTS / NO-GO) and the supports decision"),
         ("heat", "<stl>: red/yellow support heatmap"),
         ("movecheck", "<stl|3mf>: bodies, per-joint gap, fuse risk"),
@@ -362,6 +368,7 @@ NEW = {
     "fit": lambda r: _cad("fit.py", r or ["show"]),
     "flexify": lambda r: _cad("flexify.py", r),
     "preflight": lambda r: _cad("preflight.py", r),
+    "verify": lambda r: _cad("verify_cli.py", r),
     "heat": cmd_heat,
     "report": lambda r: _cad("report.py", r),
     "export": lambda r: _cad("export3mf.py", r),

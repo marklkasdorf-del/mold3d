@@ -182,4 +182,53 @@ echo '{"fit": {"pod diameter": {"mm": 38.2, "source": "measured"}, "M3 screw": {
 echo '{"fit": {"screw size": {"mm": 4, "source": "ASSUMED"}}}' > "$G/spec.json"
 "$CAD" report.py "$G/bridge10.stl" --no-preview --no-export 2>/dev/null | grep -q 'Cheapest fix: `forge parts-find "screw size"`' && ok "fit gate: a screw's cheapest fix is forge parts-find" || no "fit gate fix" "wrong fix"
 
+# 10 spec-as-test: named checks with KNOWN answers on a generated block (40x40x10, a 6.0 mm through-hole at (10,10), a corner notch)
+N="$T/named"; rm -rf "$N"; mkdir -p "$N"
+"$CAD" - "$N" <<'PY'
+import sys; sys.path.insert(0, '.'); import meshkit as mk
+from manifold3d import Manifold
+o = sys.argv[1] + '/'
+mk.save(mk.box(-20,-20,0,20,20,10) - Manifold.cylinder(10.2, 3.0, 3.0, 96).translate([10,10,-0.1]) - mk.box(-20,-20,4,-10,-5,11), o + 'block.stl')
+mk.save(Manifold.cylinder(12, 2.7, 2.7, 96).translate([10,10,-1]), o + 'pin54.stl')      # 5.4 mm pin in a 6.0 hole = 0.30 per side
+mk.save(Manifold.cylinder(12, 2.95, 2.95, 96).translate([10,10,-1]), o + 'pin59.stl')    # 5.9 mm pin = 0.05 per side
+PY
+cat > "$N/spec.json" <<'SPEC'
+{"bbox_mm": [40,40,10], "components": 1, "min_wall_mm": 2.0,
+ "checks": {
+  "hole for the M6 pin": {"hole": {"at": [10,10], "d": 6.0, "tol": 0.2}},
+  "hole is really 8 mm (wrong on purpose)": {"hole": {"at": [10,10], "d": 8.0}},
+  "hole where there is only solid": {"hole": {"at": [-10,10], "d": 6.0}},
+  "corner notch is open": {"empty_at": [-15, -12, 7]},
+  "corner notch is closed (wrong on purpose)": {"solid_at": [-15, -12, 7]},
+  "floor is solid under the notch": {"solid_at": [-15, -12, 2]},
+  "the 5.4 pin fits with 0.3": {"fits": "pin54.stl", "clearance": 0.3},
+  "the 5.9 pin fits with 0.3 (wrong on purpose)": {"fits": "pin59.stl", "clearance": 0.3},
+  "10 mm tall": {"height_mm": [9.9, 10.1]},
+  "made-up check type": {"roundness": 3}
+ }}
+SPEC
+"$CAD" verify_cli.py "$N/block.stl" --spec "$N/spec.json" > "$N/plain.txt" 2>&1; rc=$?
+"$CAD" verify_cli.py "$N/block.stl" --spec "$N/spec.json" --json > "$N/verify.json" 2>/dev/null
+"$CAD" - "$N" $rc <<'PY' && ok "spec-as-test: 15 of 20 green, every named check gives the known answer (hole 6.00, solid, notch, fits 0.30 vs 0.05, unknown type = FAIL), exit 1" || no "spec-as-test" "see $N/plain.txt"
+import json, sys
+N, rc = sys.argv[1], int(sys.argv[2]); r = json.load(open(N + '/verify.json')); c = {x['name']: x for x in r['checks']}
+assert rc == 1 and r['status'] == 'FAIL' and (r['summary']['green'], r['summary']['total']) == (15, 20), (rc, r['summary'])
+assert c['hole for the M6 pin']['status'] == 'PASS' and abs(c['hole for the M6 pin']['value'] - 6.0) < 0.05
+assert c['hole is really 8 mm (wrong on purpose)']['status'] == 'FAIL' and 'measured 6.0' in c['hole is really 8 mm (wrong on purpose)']['plain']
+assert c['hole where there is only solid']['status'] == 'FAIL' and 'solid there' in c['hole where there is only solid']['plain']
+assert c['corner notch is open']['status'] == 'PASS' and c['corner notch is closed (wrong on purpose)']['status'] == 'FAIL' and c['floor is solid under the notch']['status'] == 'PASS'
+assert c['the 5.4 pin fits with 0.3']['status'] == 'PASS' and abs(c['the 5.4 pin fits with 0.3']['value'] - 0.30) < 0.03
+assert c['the 5.9 pin fits with 0.3 (wrong on purpose)']['status'] == 'FAIL' and 'too tight' in c['the 5.9 pin fits with 0.3 (wrong on purpose)']['plain']
+assert c['10 mm tall']['status'] == 'PASS' and c['made-up check type']['status'] == 'FAIL' and 'unknown check type' in c['made-up check type']['plain']
+assert all(x.get('plain') for x in r['checks']), 'every row has a plain sentence'
+first = open(N + '/plain.txt').readline()
+assert first.startswith('CHECKS for block.stl: 15 of 20 green'), first
+PY
+(cd "$W" && cp "$N/block.stl" . && cp "$N/spec.json" . && cp "$N"/pin5*.stl . && "$FG" verify block.stl --spec spec.json > verify_rel.txt 2>&1); head -1 "$W/verify_rel.txt" | grep -q "15 of 20 green" && ok "forge verify with RELATIVE stl + spec from another folder (fits dummies resolve next to the spec)" || no "forge verify relative" "$(head -3 "$W/verify_rel.txt")"
+"$CAD" report.py "$N/block.stl" --no-preview --no-export > "$N/rep.log" 2>&1; rc=$?
+grep -q "^| Checks | ❌ 15 of 20 green: hole is really 8 mm (wrong on purpose): measured 6.00 mm at (10, 10), wanted 8 ±0.2; hole where there is only solid: no hole at (-10, 10): the part is solid there; and 3 more" "$N/rep.log" && [ $rc = 4 ] && ok "report: Checks row names the red lines in plain words, exit 4 (not done)" || no "report Checks row" "rc=$rc $(grep Checks "$N/rep.log")"
+echo '{"bbox_mm": [40,40,10], "components": 1, "min_wall_mm": 2.0}' > "$N/spec.json"
+"$CAD" report.py "$N/block.stl" --no-preview --no-export --fresh > "$N/rep2.log" 2>&1; rc=$?
+grep -q "^| Checks | ✅ 10 of 10 green |" "$N/rep2.log" && [ $rc = 0 ] && ok "report: the 3-line fast-lane spec -> 'Checks: 10 of 10 green', exit 0" || no "report fast lane" "rc=$rc $(grep Checks "$N/rep2.log")"
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

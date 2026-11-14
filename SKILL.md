@@ -9,7 +9,7 @@ allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch]
 
 # Mold3D: idea -> verified, printable part
 
-The ask: whatever the user typed after /mold3d. `FORGE` = this skill's directory (e.g. `~/.claude/skills/mold3d`). One CLI: `$FORGE/bin/forge <cmd>`; `forge --help` lists every command. Paths you give forge are relative to the current folder. **Designs are written to `./mold3d/<name>/`** in the folder you run from (`$MOLD3D_OUT` overrides). Details: `reference/toolbox.md` (commands, file map), `reference/mech-rules.md`, `reference/gotchas-forge.md`, `reference/questions.md`.
+The ask: whatever the user typed after /mold3d. `FORGE` = this skill's directory (e.g. `~/.claude/skills/mold3d`). One CLI: `$FORGE/bin/forge <cmd>`; `forge --help` lists every command. Paths you give forge are relative to the current folder. **Designs are written to `./mold3d/<name>/`** in the folder you run from (`$MOLD3D_OUT` overrides). Details: `reference/toolbox.md` (commands, file map), `reference/spec-checks.md` (spec.json as tests), `reference/questions.md` (fit sources), `reference/mech-rules.md`, `reference/gotchas-forge.md`.
 
 Envs: `$FORGE/.venv-cad` (`FORGE_CAD_PY`); optional `$FORGE/.venv-ai` (`FORGE_AI_PY`) for `text3d`/`looks`. Printer: `knowledge/printer.json`. Forge ends at a verified STL/3MF plus a verdict; slicing is the user's slicer. Specified parts hit 0.96 IoU, guessed ones 0.41: look numbers up, never recall them.
 
@@ -46,7 +46,7 @@ No `$FORGE/.venv-cad`? Run `bash $FORGE/install.sh` first. Run `forge doctor` on
 | show off / sell | SHOWCASE + AR | `forge showcase`, `forge ar` |
 
 ## Fast lane vs custom lane
-**Fast lane** (REMIX, MAKE, MECHKIT, GRIDFINITY, PLATE, SPLIT): build now with stated defaults, finish with the Print Report, then ask "want it different?". Ask first (Questionnaire) if a fit number is missing, so the first build is the right one.
+**Fast lane** (REMIX, MAKE, MECHKIT, GRIDFINITY, PLATE, SPLIT): build now with stated defaults, finish with the Print Report, then ask "want it different?". Ask first (Questionnaire) if a fit number is missing, so the first build is the right one. A simple custom part gets the 3-line spec: `{"bbox_mm": [..], "components": 1, "min_wall_mm": 2.0}`.
 **Custom lane** (MODEL): follow phases 1-5.
 
 ## Questionnaire (vague requests)
@@ -56,7 +56,7 @@ No `$FORGE/.venv-cad`? Run `bash $FORGE/install.sh` first. Run `forge doctor` on
 1. Collect what the user already told you (device model, measurements, photos).
 2. **Reference pass** for anything with a name: look at 6-9 reference images or top designs; write "## Form" in spec.md (proportions, 2-3 signature features, variant).
 3. Dimensions: look up, never recall: `forge parts-find "<part>" [--download]` + `forge step2stl`, datasheets, web search. Cite sources in spec.md. An owned object that can't be looked up: `forge photofit mat`, print at 100%, photo, outline within ~0.3 mm.
-4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/): every fit number under `fit` with its source; nothing on a fit interface is left unsourced.
+4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/): every fit number under `fit` with its source, and each requirement as a named check under `checks` (`hole`, `empty_at`, `solid_at`, `fits`, `height_mm`; `reference/spec-checks.md`). `forge verify` prints them PASS/FAIL in plain words; done = all green.
 
 ## Phase 2: LANE + PLAN
 b123d (default: functional, dimensioned, fit-critical; `templates/part_b123d.py`), scad (trivial or BOSL2), sdf (`lib/sculpt.py`, organic), mesh (`lib/meshkit.py`: edit downloads, big booleans, flexify, split), bpy (renders, text art). Plan in comments at the top of the part file: features as functions, a parameter block in mm, clearances from `fit.get("pip_gap"/"slide_gap"/"hole_comp"...)` (never hard-code 0.3 or hole sizes), origin bottom-centre on Z=0, print orientation designed in (largest flat face down, overhangs <= 45 deg, bridges < 18 mm, walls >= 2.0).
@@ -65,7 +65,7 @@ b123d (default: functional, dimensioned, fit-critical; `templates/part_b123d.py`
 One change, then `forge run part.py --lane <lane> --spec spec.json --name <name>`, read verify.json/REPORT.md (did volume/bbox change as expected? no change = dropped boolean), read sheet.png once, critique, next change. Moving parts use the Mech API (`reference/mech-rules.md`). Run `forge preflight` in the loop for anything with overhangs.
 - **Looks Score** (only if `forge doctor` shows the AI env): for named objects, `forge looks <stl> --target "<thing>"` on clean renders; < 30% means iterate FORM, not mechanics.
 - Never judge from one view. Overlap cutters 0.05 mm (coplanar faces weld pins). Export with angular_tolerance 0.05. Check must-jam controls along the whole path. Cap 6 iterations, then re-plan or route to FIND.
-- Finish when verify passes every spec key, selftest passes (movers), preflight is GO/GO+SUPPORTS, and the visual checklist is yes.
+- Finish when `forge verify <stl> --spec spec.json` is all green (every line PASS; a FAIL means the part is not what was asked for), selftest passes (movers), preflight is GO/GO+SUPPORTS, and the visual checklist is yes.
 
 ## Phase 4: FIT
 Print-in-place gaps come from `fit.json`; calibration steps in `reference/mech-rules.md`. For mating parts or parts around the user's object, run an assembled-pose check with a dummy of the object. Threads, snap-fits and press-fits get a coupon first.
@@ -85,6 +85,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 | | |
 |---|---|
 | Verdict | ✅ GO / ⚠️ GO + supports / ❌ NO-GO — supports ON/OFF |
+| Checks | ✅ N of N green / ❌ 6 of 8 green: <the red lines in plain words> |
 | Fit | ✅ fit-checked: N fit numbers sourced / ⚠️ NOT FIT-CHECKED: <what> assumed, cheapest fix (only when `fit` is set) |
 | Moving parts | <n>, all clear through full motion |
 | Gaps | <mm> (calibrated on your printer / default — print the Fit Card) |
@@ -95,7 +96,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 ```
 - Issues are plain English ("first-layer gap under 0.35" becomes "tight gap near the bed may fuse"); never paste preflight jargon or numbers you did not get from the report.
 - No `Print` row unless a slicer hook is set (grams are never estimated from volume). No `Moving parts` / `Gaps` rows for static parts.
-- NO-GO: no 3MF is written; fix the geometry and re-run `forge report`. Send `preview.png` when the channel supports files. If the notes say previews are off, there is no Blender: say so in one line, everything else still works.
+- NO-GO: no 3MF is written; fix the geometry and re-run `forge report`. A red Checks row (exit 4) means the part misses its spec: fix it, never hand it over. Send `preview.png` when the channel supports files. If the notes say previews are off, there is no Blender: say so in one line, everything else still works.
 - The 3MF filename keeps the `_SUPPORTS-OFF` / `_SUPPORTS-ON` suffix: tell the user to open that file and check the Support box matches.
 - Done = the file path, this report, a picture, and one line on what was assumed.
 
@@ -103,7 +104,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 After a print ask "What was off? (fit / looks / strength / print quality / nothing)". Gaps -> `forge fit set ...` + `knowledge/fit-log.md`; lessons -> `knowledge/lessons.md`. Skill or tool changes -> `tests/run_suite.sh`.
 
 ## STOP-AND-CHECK (before each render and before "done")
-- [ ] axis/centre/units (bbox vs spec, mm) - [ ] every boolean has a volume delta - [ ] no floating parts (components == spec)
+- [ ] `forge verify` all green (axis/centre/units, components, named checks) - [ ] every boolean has a volume delta
 - [ ] walls >= 2.0 - [ ] movers: selftest PASS, controls jam, gaps ~= fit.pip_gap - [ ] preflight GO/GO+SUPPORTS
 - [ ] named object: reference pass done, Looks >= 30% (if AI env) - [ ] every `fit` number sourced (no NOT FIT-CHECKED stamp, or the fix offered) - [ ] claimed with numbers
 

@@ -18,6 +18,7 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 | `flexify model.stl` | any creature -> print-in-place flexi (lap joints on cone pins, self-healing joint placement) | SDF gecko 7 joints +-22 deg, 3 s |
 | `sculpt` | SDF organic lane (gecko recipe in lib/sculpt.py) | watertight in 3 s |
 | `text3d "idea" [--base N] [--flexi] [--helmet]` | local text->concept->Hunyuan3D->printable figure + preflight + slice; `--helmet` = wearable 2-piece helmet | 4 figures ~3.5 min each; helmet v2 looks 5.3% vs egg 0.9% (the real prop scored 13.5%), 34.5 h / 742 g |
+| `verify stl [--spec spec.json]` | every spec requirement (size, walls, components, named `checks`: hole / empty_at / solid_at / fits, fit sources) as PASS/FAIL in plain words, "N of N green"; `--raw` for the numbers table | 21/21 known answers on the suite fixture |
 | `preflight stl [--slice/--orient/--heat]`, `heat` | failure prediction: knife-edge contact, mid-air islands, bridges vs cantilevers, thin walls, fused PIP gaps, auto-support traps, tip-over |
 | `report <dir|stl> [--json]` | the Print Report: verdict, moving parts, gaps [V]/[R], time/grams, plain-English watch-fors, files; collects 3MF + preview + report.json | fitcard: GO, 9 movers clear |
 | `export stl [--supports on/off/auto] [--out f.3mf]` | 3MF carrying the supports checkbox into Orca/Bambu/AnkerMake/Prusa slicers; `_SUPPORTS-OFF`/`-ON` in the name | 4/4 known cases correct |

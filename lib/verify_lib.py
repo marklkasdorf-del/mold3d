@@ -6,7 +6,7 @@ Every check returns a row {name, status: PASS|WARN|FAIL, value, detail}.
 Defaults only FAIL on definitely-bad things (open mesh, inverted, floating bodies,
 too big for bed, empty); soft limits (walls, supports) become hard when the spec sets them.
 """
-import json, math, sys
+import json, math, os, sys
 import numpy as np
 import trimesh
 
@@ -179,10 +179,12 @@ def overhang(mesh, zmin, angle=45.0):
     return float(a[bad].sum()), [{"z_mm": float(z), "area_mm2": round(float(ar), 1)} for z, ar in top]
 
 
-def verify(path, spec=None):
+def verify(path, spec=None, spec_dir=None):
+    """all checks on one STL. spec_dir: folder the spec came from (relative dummy paths in "fits" checks resolve there)."""
     spec = spec or {}
     rows = []
     m = load_mesh(path)
+    m.metadata["file_path"] = str(path)
     ext = m.extents; mn, mx = m.bounds
     wt = bool(m.is_watertight)
     _, cnt = np.unique(m.edges_sorted, axis=0, return_counts=True)
@@ -261,13 +263,197 @@ def verify(path, spec=None):
         lo, hi = spec["volume_mm3"]
         ok = lo <= vol <= hi
         rows.append(row("spec_volume", "PASS" if ok else "FAIL", round(vol, 1), f"want [{lo}, {hi}]" + ("" if ok else " (a boolean may have dropped/duplicated geometry)")))
+    # --- named requirements from the spec ("checks": {...}), each one PASS/FAIL in plain words
+    rows += named_checks(m, spec, spec_dir)
     # --- the "no guessed numbers" gate: every fit number in the spec needs a real source (spec_lib)
     import spec_lib
     fr = spec_lib.fit_row(spec)
     if fr:
         rows.append(fr)
+    plain_rows(rows, spec)
     status = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
-    return {"status": status, "info": info, "checks": rows}
+    green = sum(1 for r in rows if r["status"] == "PASS")
+    return {"status": status, "info": info, "checks": rows,
+            "summary": {"green": green, "total": len(rows), "not_green": [r["plain"] for r in rows if r["status"] != "PASS"]}}
+
+
+# ---------------------------------------------------------------- named checks (spec "checks")
+def _ax(axis):
+    return {"x": 0, "y": 1, "z": 2}[str(axis).lower()]
+
+
+def _point_inside(mesh, p):
+    try:
+        return bool(mesh.contains(np.array([p], dtype=float))[0])
+    except Exception:
+        return None
+
+
+def check_hole(mesh, c):
+    """{"hole": {"at": [x, y], "d": 6.0, "tol": 0.2, "axis": "z", "along": z0}}: a through-hole of diameter d whose axis passes
+    through (x, y). Measured by 24 radial rays from the axis at mid-depth: diameter = 2 x median first-hit distance."""
+    h = c["hole"]
+    ax = _ax(h.get("axis", "z"))
+    others = [i for i in (0, 1, 2) if i != ax]
+    at = [float(v) for v in h["at"]]
+    want, tol = float(h["d"]), float(h.get("tol", 0.2))
+    lo, hi = mesh.bounds
+    along = float(h.get("along", (lo[ax] + hi[ax]) / 2))
+    centre = np.zeros(3); centre[others[0]], centre[others[1]], centre[ax] = at[0], at[1], along
+    where = f"({at[0]:g}, {at[1]:g})"
+    if _point_inside(mesh, centre):
+        return "FAIL", None, f"no hole at {where}: the part is solid there"
+    n = 24
+    ang = np.linspace(0, 2 * math.pi, n, endpoint=False)
+    dirs = np.zeros((n, 3)); dirs[:, others[0]] = np.cos(ang); dirs[:, others[1]] = np.sin(ang)
+    d = tri_ray_first_hit(np.tile(centre, (n, 1)), dirs, mesh.triangles)
+    hit = np.isfinite(d) & (d < max(want * 3, want + 10))
+    if hit.sum() < n * 0.75:
+        return "FAIL", None, f"nothing around {where}: no hole wall there (open space or the hole is somewhere else)"
+    dia = 2 * float(np.median(d[hit]))
+    off = float(np.ptp(d[hit]))                       # wall distance spread: a centred round hole has ~0
+    # through? the axis must leave the part both ways without hitting anything
+    up = np.zeros((1, 3)); up[0, ax] = 1.0
+    thru = not np.isfinite(tri_ray_first_hit(centre[None], up, mesh.triangles)[0]) and \
+           not np.isfinite(tri_ray_first_hit(centre[None], -up, mesh.triangles)[0])
+    ok = abs(dia - want) <= tol and thru
+    txt = f"measured {dia:.2f} mm at {where}, wanted {want:g} ±{tol:g}"
+    if not thru:
+        txt += "; it does not go all the way through"
+    if off > 0.5 and ok:
+        txt += f" (hole centre is off by ~{off / 2:.1f} mm)"
+    return ("PASS" if ok else "FAIL"), round(dia, 2), txt
+
+
+def check_point(mesh, c, kind):
+    p = [float(v) for v in c[kind]]
+    inside = _point_inside(mesh, p)
+    where = f"({p[0]:g}, {p[1]:g}, {p[2]:g})"
+    if inside is None:
+        return "WARN", None, f"could not test {where} (mesh not closed)"
+    want_inside = kind == "solid_at"
+    ok = inside == want_inside
+    if want_inside:
+        return ("PASS" if ok else "FAIL"), inside, f"solid at {where}" if ok else f"empty at {where}, expected solid"
+    return ("PASS" if ok else "FAIL"), not inside, f"open at {where}" if ok else f"solid at {where}, expected an opening"
+
+
+def check_fits(path, c, spec_dir):
+    """{"fits": "dummy.stl", "clearance": 0.3, "move": [x, y, z]}: the object dummy, moved into place, must not collide
+    and must have at least `clearance` all around (verify --assembly under the hood)."""
+    dummy = c["fits"]
+    if not os.path.isabs(dummy):
+        dummy = os.path.join(spec_dir or os.path.dirname(os.path.abspath(path)), dummy)
+    if not os.path.exists(dummy):
+        return "FAIL", None, f"dummy file not found: {dummy}"
+    clr = float(c.get("clearance", 0.2))
+    res = assembly(path, dummy, clr, move_b=tuple(c.get("move", (0, 0, 0))))
+    inter = res["info"]["interference"]["volume_mm3"]; gap = res["info"]["min_gap_mm"]
+    if inter > 0.5:
+        return "FAIL", inter, f"the object collides with the part ({inter:g} mm3 overlap)"
+    if gap is None:
+        return "PASS", 0.0, f"the object seats against the part (touching, no overlap)"
+    ok = gap >= clr - 0.02
+    return ("PASS" if ok else "FAIL"), round(gap, 3), f"{gap:.2f} mm clearance around the object, wanted ≥ {clr:g}" + ("" if ok else ": too tight")
+
+
+def check_range(value, c, key, label, unit):
+    lo, hi = c[key]
+    ok = float(lo) <= value <= float(hi)
+    return ("PASS" if ok else "FAIL"), round(value, 2), f"{label} {value:.1f} {unit}, wanted {lo:g} to {hi:g}"
+
+
+RANGE_KEYS = {"height_mm": (2, "height", "mm"), "width_mm": (0, "width (X)", "mm"), "depth_mm": (1, "depth (Y)", "mm")}
+
+
+def named_checks(mesh, spec, spec_dir=None):
+    """spec["checks"] = {"<requirement in plain words>": {<one check type>}} -> rows with the requirement as the name."""
+    rows = []
+    checks = spec.get("checks") or {}
+    if not isinstance(checks, dict):
+        return [row("checks", "FAIL", None, 'spec "checks" must be an object of {"requirement": {...}}')]
+    path = getattr(mesh, "metadata", {}).get("file_path") or spec.get("_stl")
+    for name, c in checks.items():
+        if str(name).startswith("_"):
+            continue
+        try:
+            if not isinstance(c, dict):
+                st, val, txt = "FAIL", None, "check must be an object like {\"hole\": {...}}"
+            elif "hole" in c:
+                st, val, txt = check_hole(mesh, c)
+            elif "empty_at" in c:
+                st, val, txt = check_point(mesh, c, "empty_at")
+            elif "solid_at" in c:
+                st, val, txt = check_point(mesh, c, "solid_at")
+            elif "fits" in c:
+                st, val, txt = check_fits(path, c, spec_dir) if path else ("FAIL", None, "fits check needs the STL path")
+            elif "mass_g" in c:
+                st, val, txt = check_range(float(mesh.volume) / 1000 * PLA_G_CM3, c, "mass_g", "about", "g of PLA")
+            elif any(k in c for k in RANGE_KEYS):
+                k = next(k for k in RANGE_KEYS if k in c); i, lab, unit = RANGE_KEYS[k]
+                st, val, txt = check_range(float(mesh.extents[i]), c, k, lab, unit)
+            else:
+                st, val, txt = "FAIL", None, f"unknown check type {sorted(c)}; known: hole, empty_at, solid_at, fits, height_mm, width_mm, depth_mm, mass_g"
+        except Exception as e:                         # a broken check is a failed check, never a silent pass
+            st, val, txt = "FAIL", None, f"check could not run ({type(e).__name__}: {e})"
+        r = row(str(name), st, val, txt); r["named"] = True; r["plain"] = f"{name}: {txt}"
+        rows.append(r)
+    return rows
+
+
+# ---------------------------------------------------------------- plain English
+def plain_rows(rows, spec):
+    """fill row["plain"]: one sentence a maker understands, from the row's own numbers (never invented)."""
+    for r in rows:
+        if r.get("plain"):
+            continue
+        n, v, d, st = r["name"], r["value"], r.get("detail", ""), r["status"]
+        if n == "watertight":
+            p = "Mesh is closed (no holes in the surface)" if st == "PASS" else f"Mesh has holes in its surface ({d.split(';')[0]})"
+        elif n == "winding":
+            p = "Triangles face the same way" if st == "PASS" else "Some triangles are flipped (inconsistent winding)"
+        elif n == "normals_outward":
+            p = "Surface faces outward" if st == "PASS" else "Mesh is inside-out"
+        elif n == "non_empty":
+            p = f"Has volume ({v:g} mm3)" if st == "PASS" else "Almost no volume: a boolean probably deleted the part"
+        elif n == "components":
+            want = spec.get("components", 1)
+            p = (f"One solid piece" if v == 1 else f"{v} separate pieces, as intended") if st == "PASS" else \
+                f"{v} separate piece{'s' if v != 1 else ''}, expected {want}" + (": something is floating or disconnected" if v > want else "")
+        elif n == "tiny_bodies":
+            p = f"{len(v)} speck-sized piece{'s' if len(v) != 1 else ''} (under 5 mm3), probably debris"
+        elif n == "bed_fit":
+            bed = spec.get("bed", DEFAULT_BED)
+            size = " x ".join(f"{x:g}" for x in v); bedtxt = " x ".join(f"{float(x):g}" for x in bed)
+            p = f"Fits the bed ({size} mm on {bedtxt})" if st == "PASS" else f"Too big for the bed: {size} mm on {bedtxt}" + (" (fits turned 90°)" if "rotated" in d else "")
+        elif n == "units":
+            p = "Part is under 2 mm across: the file is probably in metres or inches, not mm"
+        elif n == "bed_contact":
+            p = f"{v:g} mm2 sits on the bed" + ("" if st == "PASS" else ": small footprint, weak first layer, consider flipping or a brim")
+        elif n == "z_min":
+            p = f"Part floats {v:g} mm above z=0 (fine for assemblies, slicers drop it)"
+        elif n == "supports":
+            lim = spec.get("max_support_pct")
+            p = f"Overhangs: {v:g}% of the surface needs support" + (f" (limit {lim:g})" if lim is not None else " (soft limit 10)")
+        elif n == "min_wall":
+            mw = spec.get("min_wall_mm")
+            p = (f"Thinnest wall {v:.2f} mm" if v is not None else "No thin walls found") + (f" (minimum {mw:g})" if mw is not None else " (1.2 is the printable minimum)")
+            if st != "PASS":
+                p += ": thin spots at " + "; ".join(x.strip() for x in d.split(" at ", 1)[1:]) if " at " in d else ": too thin in places"
+        elif n == "spec_bbox":
+            tol = spec.get("bbox_tol", 0.5); want = spec.get("bbox_mm", [])
+            p = f"Size {' x '.join(f'{x:.1f}' for x in v)} mm, wanted {' x '.join(f'{float(x):g}' for x in want)} within {tol:g}"
+            if st != "PASS":
+                p += ": check units, scale and which axis is which"
+        elif n == "spec_volume":
+            lo, hi = spec.get("volume_mm3", [0, 0])
+            p = f"Volume {v:g} mm3, wanted {lo:g} to {hi:g}" + ("" if st == "PASS" else ": a boolean dropped or doubled something")
+        elif n == "render":
+            p = "Preview is off (Blender did not run); everything else works"
+        else:
+            p = f"{n}: {d or v}"
+        r["plain"] = p
+    return rows
 
 
 # ---------------------------------------------------------------- print orientation candidates
@@ -371,6 +557,16 @@ def assembly(path_a, path_b, clearance=0.2, move_a=(0, 0, 0), move_b=(0, 0, 0), 
     status = "FAIL" if any(r["status"] == "FAIL" for r in rows) else "PASS"
     return {"status": status, "info": {"a": str(path_a), "b": str(path_b), "move_a": list(move_a), "move_b": list(move_b),
                                       "clearance": clearance, "interference": inter, "min_gap_mm": gap}, "checks": rows}
+
+
+def format_plain(res):
+    """the maker-facing view: N of M green, then one line per check in plain words."""
+    s = res.get("summary") or {"green": sum(1 for r in res["checks"] if r["status"] == "PASS"), "total": len(res["checks"])}
+    f = res["info"].get("file") or res["info"].get("a", "")
+    out = [f"CHECKS for {os.path.basename(str(f))}: {s['green']} of {s['total']} green" + ("" if res["status"] != "FAIL" else " (FAIL: fix the red lines before calling it done)")]
+    for r in res["checks"]:
+        out.append(f"  {r['status']:<5} {r.get('plain') or r['name'] + ': ' + str(r.get('detail') or r['value'])}")
+    return "\n".join(out)
 
 
 def format_text(res):

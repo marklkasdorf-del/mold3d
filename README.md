@@ -238,7 +238,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 |---|---|
 | `doctor` | check Blender, OpenSCAD, venvs, optional models, printer profile |
 | `run` | `forge run part.py [--lane b123d\|scad\|bpy] [--spec spec.json] [--name N] [--section z=5] [--ref img] [--eevee] [--no-render]` -> `mold3d/<name>/` with STL, sheet, verify.json, REPORT.md, `iter_NN/` |
-| `verify` | `bin/verify model.stl [--spec spec.json]`, `--orient` (rank the 6 lay-down orientations), `--assembly a.stl b.stl --clearance 0.3 --move-b=x,y,z` |
+| `verify` | `forge verify model.stl [--spec spec.json]` every requirement as PASS/FAIL in plain words ("N of N green"; named checks: `hole`, `empty_at`, `solid_at`, `fits`, see `reference/spec-checks.md`), `--raw` for the numbers; `bin/verify --orient` (rank the 6 lay-down orientations), `--assembly a.stl b.stl --clearance 0.3 --move-b=x,y,z` |
 | `preflight` | `forge preflight model.stl [--slice] [--orient] [--heat] [--json out.json]` verdict + supports decision |
 | `export` | `forge export model.stl [--supports on\|off\|auto] [--out file.3mf]` 3MF that carries the supports decision (Orca/Bambu/AnkerMake `enable_support`, PrusaSlicer `support_material`); default name ends `_SUPPORTS-OFF` / `_SUPPORTS-ON`; auto = the preflight verdict |
 | `heat` | `forge heat model.stl` support heatmap PNGs (Blender) |

@@ -10,6 +10,7 @@ Gathers what exists (never guesses; anything missing is omitted):
 Collects the deliverables next to the STL: <name>.3mf (via the same writer as `forge export`, supports decision baked in),
 preview.png (copied from an existing render; rendered with Blender only if Blender is installed), report.json.
 Prints the chat-ready markdown table (the one the agent shows the user); --json prints report.json instead.
+Exit 0 = print-ready, 3 = preflight NO-GO (no 3MF written), 4 = a spec check failed (the part is not what was asked for).
 """
 import argparse, datetime, glob, json, os, re, shutil, subprocess, sys
 
@@ -103,6 +104,26 @@ def _jload(path):
         return json.load(open(path))
     except Exception:
         return None
+
+
+def get_checks(out_dir, stl, spec, fresh):
+    """verify's 'N of M green': a verify.json next to the STL that is newer than it (forge run wrote it), else run verify now."""
+    pre = _suffix(out_dir, stl)
+    cache = os.path.join(out_dir, pre + "verify.json")
+    res = None
+    if not fresh and os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(stl):
+        res = _jload(cache)
+        if not (res and res.get("summary")):
+            res = None
+    if res is None:
+        try:
+            import verify_lib
+            res = verify_lib.verify(stl, spec, spec_dir=out_dir)
+            json.dump(res, open(cache, "w"), indent=1, default=str)
+        except Exception as e:
+            return {"error": f"{type(e).__name__}: {e}"}
+    s = res["summary"]
+    return {"green": s["green"], "total": s["total"], "not_green": s.get("not_green", []), "status": res.get("status")}
 
 
 def get_preflight(out_dir, stl, fresh, allow_tight):
@@ -206,6 +227,7 @@ def gather(a):
     fs = spec_lib.fit_summary(spec)
     if fs:
         rep["fit"] = {"stamped": fs[0], "text": fs[1], "numbers": spec_lib.fit_numbers(spec)}
+    rep["checks"] = get_checks(out_dir, stl, spec, a.fresh)
     if mech:
         rep["moving_parts"] = mech
         tag = fit.tag("pip_gap")
@@ -268,6 +290,13 @@ def markdown(rep):
     if fitinfo and fitinfo.get("stamped"):
         head.append("**NOT FIT-CHECKED**")
     rows = [("Verdict", verdict_text(rep["preflight"]))]
+    ck = rep.get("checks") or {}
+    if "total" in ck:
+        rest = [t for t in ck["not_green"] if not t.startswith("NOT FIT-CHECKED")]     # the Fit row already says that one
+        txt = f"{ck['green']} of {ck['total']} green"
+        if rest:
+            txt += ": " + "; ".join(rest[:2]) + (f"; and {len(rest) - 2} more" if len(rest) > 2 else "")
+        rows.append(("Checks", ("✅ " if ck["green"] == ck["total"] else "❌ " if ck.get("status") == "FAIL" else "⚠️ ") + txt))
     if fitinfo:
         rows.append(("Fit", ("⚠️ " if fitinfo["stamped"] else "✅ ") + fitinfo["text"]))
     mp = rep.get("moving_parts")
@@ -315,7 +344,7 @@ def main(argv=None):
     print(json.dumps(rep, indent=1, default=str) if a.json else markdown(rep))
     for n in rep.get("notes", []):
         print(f"\nnote: {n}", file=sys.stderr)
-    sys.exit(3 if rep["preflight"]["verdict"] == "NO-GO" else 0)
+    sys.exit(3 if rep["preflight"]["verdict"] == "NO-GO" else 4 if (rep.get("checks") or {}).get("status") == "FAIL" else 0)
 
 
 if __name__ == "__main__":
