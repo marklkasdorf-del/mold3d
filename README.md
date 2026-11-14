@@ -11,6 +11,10 @@
 curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
 ```
 
+1. Paste that into Terminal and press Enter. Wait about 3 minutes (it asks you one question: which printer you have).
+2. Open a new Terminal tab.
+3. Type `claude`, then type `/mold3d a phone stand for my iPhone`.
+
 **Or let your AI do it.** Paste this into Claude Code or Codex:
 
 ```
@@ -165,7 +169,7 @@ Most print-in-place gaps in the benchmark (0.29-0.36 mm) are **verified in geome
 
 ## Quickstart
 
-**One command** (macOS or Linux, no sudo; installs into `~/.claude/skills/mold3d`, links it for Codex if you have `~/.codex`, asks which printer you have, and runs a self-test; re-run it any time to upgrade):
+**One command** (macOS or Linux, no sudo; installs into `~/.claude/skills/mold3d`, links it for Codex if you have `~/.codex`, asks which printer you have, and runs a self-test; re-run it any time to upgrade; add `MOLD3D_VERBOSE=1` to see every technical detail, otherwise the raw output goes to `install.log` in the install folder):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash
