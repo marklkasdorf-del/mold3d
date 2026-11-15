@@ -78,6 +78,8 @@ do_download() {
       || echo "could not fast-forward (local changes?); keeping the current checkout"
     if [ -n "$keep" ]; then [ -f "$DIR/knowledge/printer.json" ] || cp "$keep" "$DIR/knowledge/printer.json"; rm -f "$keep"; fi
     echo "updated existing install"
+  elif [ -f "$DIR/bin/forge" ] && grep -q '^name: mold3d' "$DIR/SKILL.md" 2>/dev/null; then
+    echo "using the copy already in place (no git; installed by a skills manager)"   # e.g. npx skills add
   elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
     setmsg "The folder $DIR already exists and isn't Mold3D." "Move that folder away (or set MOLD3D_DIR to another place) and run the command again."; return 1
   else

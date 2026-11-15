@@ -26,7 +26,7 @@ Envs: `$FORGE/.venv-cad` (`FORGE_CAD_PY`); optional `$FORGE/.venv-ai` (`FORGE_AI
 10. One sheet read per iteration, deterministic tools over re-asking, no subagent fan-outs for CAD.
 
 ## First use
-No `$FORGE/.venv-cad`? Run `bash $FORGE/install.sh` first. Run `forge doctor` only on first use or after an error (it is cached for 24 h; `--fresh` re-checks). Then once: `cat $FORGE/knowledge/{lessons.md,printer.json}; forge fit show`. If `pip_gap` is still `[R]` (research default), mention once that the Fit Card (`forge mech build fitcard`, ~1 h, ~16 g) calibrates every moving part.
+No `$FORGE/.venv-cad`? Run `MOLD3D_DIR="$FORGE" bash $FORGE/install.sh` first (sets up this copy in place). Run `forge doctor` only on first use or after an error (it is cached for 24 h; `--fresh` re-checks). Then once: `cat $FORGE/knowledge/{lessons.md,printer.json}; forge fit show`. If `pip_gap` is still `[R]` (research default), mention once that the Fit Card (`forge mech build fitcard`, ~1 h, ~16 g) calibrates every moving part.
 
 ## Route (first match wins; tell the user the route in one line)
 | The ask | Route | Tools |
