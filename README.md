@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/instal
 Install Mold3D for me: run `curl -fsSL https://raw.githubusercontent.com/marklkasdorf-del/mold3d/main/install.sh | bash`, pick my printer if it asks, then tell me what it printed at the end.
 ```
 
-**Use a skills manager?** `npx skills add marklkasdorf-del/mold3d` works too; Mold3D finishes its setup the first time you use it.
+**Other ways in:** as a Claude Code plugin (`/plugin marketplace add marklkasdorf-del/mold3d`, then `/plugin install mold3d@mold3d`) or with a skills manager (`npx skills add marklkasdorf-del/mold3d`). Either way, Mold3D finishes its setup the first time you use it.
 
 Then in Claude Code: `/mold3d <what you want>`
 

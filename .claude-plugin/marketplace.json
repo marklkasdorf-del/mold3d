@@ -1,0 +1,16 @@
+{
+  "name": "mold3d",
+  "description": "Mold3D: AI-designed 3D parts that are proven to print.",
+  "owner": {
+    "name": "Mark Kasdorf",
+    "url": "https://github.com/marklkasdorf-del"
+  },
+  "plugins": [
+    {
+      "name": "mold3d",
+      "source": "./",
+      "description": "Design 3D-printable parts that are proven to print.",
+      "category": "design"
+    }
+  ]
+}

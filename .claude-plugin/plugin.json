@@ -1,0 +1,11 @@
+{
+  "name": "mold3d",
+  "displayName": "Mold3D",
+  "version": "2.2.0",
+  "description": "Design 3D-printable parts that are proven to print: code-CAD plus layer-by-layer preflight, motion checks for moving parts, and a Print Report.",
+  "author": { "name": "Mark Kasdorf", "url": "https://github.com/marklkasdorf-del" },
+  "homepage": "https://github.com/marklkasdorf-del/mold3d",
+  "repository": "https://github.com/marklkasdorf-del/mold3d",
+  "license": "MIT",
+  "keywords": ["3d-printing", "cad", "build123d", "stl", "fdm", "print-in-place", "preflight"]
+}
