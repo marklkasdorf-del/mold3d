@@ -22,6 +22,8 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 | `preflight stl [--slice/--orient/--heat]`, `heat` | failure prediction: knife-edge contact, mid-air islands, bridges vs cantilevers, thin walls, fused PIP gaps, auto-support traps, tip-over |
 | `report <dir|stl> [--json]` | the Print Report: verdict, moving parts, gaps [V]/[R], time/grams, plain-English watch-fors, files; collects 3MF + preview + report.json | fitcard: GO, 9 movers clear |
 | `export stl [--supports on/off/auto] [--out f.3mf]` | 3MF carrying the supports checkbox into Orca/Bambu/AnkerMake/Prusa slicers; `_SUPPORTS-OFF`/`-ON` in the name | 4/4 known cases correct |
+| `export --piece NAME=a.stl@1,b.stl@2 [--piece ...] [--expect JSON]` | every piece on one plate as a Bambu/Orca project 3MF, colour parts on filament slots, supports per piece; reads itself back with `contents` | suite: 2 pieces / 2 slots read back |
+| `contents f.3mf [--expect JSON]` | what is really in a 3MF: pieces, parts, filament slots, supports, and where each part shows (top / bed face only / buried); `--expect` mismatch = exit 1, do not send | caught both click fidget v7 delivery mistakes |
 | `looks stl --target "x"` | recognizability score (CLIP, clean renders) | ranked all 3 bench pairs like a human |
 | `split stl [--scale]` | bed-sized pieces, smallest seams, pins + engraved seam IDs, pins.stl | 290 mm dragon -> 6 pieces, 2 s |
 | `photofit mat` / `photofit photo.jpg` | Calibration Mat (ArUco) -> exact outline -> Gridfinity pocket bin | 72x24 test: -0.12/-0.25 mm |
@@ -32,7 +34,7 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 
 
 ## File map
-`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, export3mf.py, report.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `./mold3d/<name>/` in the folder you run forge from (`$MOLD3D_OUT` overrides).
+`lib/`: remix.py, make.py, plate.py, mechkit/{core,fitcard,gyro,planetary,balisong,helix,hinge,cli}.py, flexify.py, sculpt.py, meshkit.py, preflight.py, export3mf.py, contents3mf.py, report.py, heat_render.py, looks.py, split.py, photofit.py, gridfinity.py, ar.py, showcase.py + showcase_bpy.py, fit.py, gears.py, motion.py, grade.py, movecheck.py, text3d/{text3d.sh,concept.py,figure_post.py,relief.py}, text3d/hy3d_run.py (+ your Hunyuan3D-2 checkout in text3d/Hunyuan3D-2). `knowledge/`: fit.json, fit-log.md, lessons.md, benchmark-2026-10-17.md, mechkit.md, mechkit-tests.json, printer.json (+ printers/), devices.json. `bench/`: benchmark notes + the blind attempt scripts. `tests/`: run_all.sh (smoke), run_suite.sh (known-answer suite). Outputs: `./mold3d/<name>/` in the folder you run forge from (`$MOLD3D_OUT` overrides).
 
 ## Routing quality notes
 text3d figures read clearly but fine detail is soft at 60 mm and they need supports; flexi-from-text is chunky (use an SDF body or a sculpt); never hand-model a helmet or character (blobs): use FIND+REMIX or TEXT3D.

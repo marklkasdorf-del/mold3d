@@ -282,16 +282,23 @@ def cmd_heat(rest):
 # Every sub-script runs with cwd=lib/, so a path the user typed relative to THEIR folder must be made absolute first.
 FILE_EXT = (".stl", ".3mf", ".step", ".stp", ".obj", ".ply", ".glb", ".usdz", ".json", ".jpg", ".jpeg", ".png", ".heic", ".pdf", ".py", ".scad", ".gcode")
 PATH_FLAGS = ("--out", "--output", "-o", "--parts", "--spec", "--ref", "--dst", "--json")   # values are paths even if they don't exist yet
-INPUT_CMDS = ("verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
+INPUT_CMDS = ("contents", "verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
 
 
 def absargs(cmd, rest):
     """Make every path argument absolute (relative to the caller's cwd); fail plainly if an input file is missing."""
     out, flag_val = [], False
     first_input = True
+    piece_val = False
     for x in rest:
         if flag_val:
             out.append(os.path.abspath(x)); flag_val = False; continue
+        if piece_val:                                  # --piece NAME=a.stl@1,b.stl@2: each part path relative to the caller
+            name, _, parts = x.partition("=")
+            out.append(name + "=" + ",".join(os.path.abspath(f) + ("@" + s if s else "") for f, _, s in (t.partition("@") for t in parts.split(","))))
+            piece_val = False; continue
+        if x == "--piece":
+            out.append(x); piece_val = True; continue
         if x in PATH_FLAGS:
             out.append(x); flag_val = True; continue
         if x.startswith("-") and "=" in x and x.split("=", 1)[0] in PATH_FLAGS:
@@ -331,7 +338,8 @@ COMMANDS = [
     ]),
     ("Hand off", [
         ("report", "<dir|stl>: the Print Report (verdict, gaps, time, files) plus the print-ready 3MF"),
-        ("export", "<stl> [--supports on|off|auto]: 3MF that carries the supports checkbox into your slicer"),
+        ("export", "<stl> [--supports on|off|auto] | --piece NAME=a.stl@1,b.stl@2 ...: 3MF with the supports checkbox (and colour parts) baked in"),
+        ("contents", "<3mf> [--expect JSON]: what is really in the file (pieces, colours, supports, what shows from the top) vs what was asked"),
         ("ar", "<stl>: real-size AR preview (USDZ for iPhone/Vision Pro, GLB for Quest)"),
         ("showcase", "<dir|stl>: video + GIF + listing kit"),
     ]),
@@ -374,6 +382,7 @@ NEW = {
     "heat": cmd_heat,
     "report": lambda r: _cad("report.py", r),
     "export": lambda r: _cad("export3mf.py", r),
+    "contents": lambda r: _cad("contents3mf.py", r),
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),
     "ar": lambda r: _cad("ar.py", r),
     "showcase": lambda r: _cad("showcase.py", r),

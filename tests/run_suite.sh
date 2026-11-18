@@ -260,4 +260,34 @@ echo "$out" | grep -q "now using Anycubic Kobra X" && grep -q "bed 260 x 260 x 2
 echo '{"name": "edited by hand", "bridge_mm": 25}' > "$P/noscr.json"
 FORGE_PRINTER="$P/noscr.json" "$CAD" printer.py | grep -q "bridge_mm  *25 mm  *UNVERIFIED: set in this profile without a source line" && ok "a threshold edited without a source line shows as UNVERIFIED, never credited to the generic source" || no "unverified edit" "$(FORGE_PRINTER="$P/noscr.json" "$CAD" printer.py | grep bridge)"
 
+# gap_min: a slider in a channel. Flush faces are their own FAIL ("touch"), never a pass; a tagged stop is allowed;
+#   a 0.10 mm side is too tight; sliding into the end wall collides; 0.25 all round passes along the whole path.
+#   contents: a 2-colour export reads back 2 pieces / 2 filaments; text on the bed face is flagged as not visible from the top.
+"$CAD" - "$T" <<'PY2' && ok "gap_min: 0.25 all round PASS, flush floor FAIL as touching, tagged stop PASS, 0.10 side FAIL, end-wall collision FAIL; contents flags bed-face text" || no "gap_min / contents" "known answers differ"
+import sys, os, json, subprocess, trimesh, numpy as np; sys.path.insert(0, '.'); import verify_lib as V
+T = sys.argv[1]
+def box(lo, hi): return trimesh.creation.box(extents=np.subtract(hi, lo), transform=trimesh.transformations.translation_matrix(np.add(lo, hi) / 2))
+def save(m, n): p = os.path.join(T, n); m.export(p); return p
+chan = save(trimesh.util.concatenate([box([-20, -6, -2], [20, 6, 0]), box([-20, -6, 0], [20, -5.25, 4]), box([-20, 5.25, 0], [20, 6, 4]), box([20, -6, -2], [21, 6, 4])]), "chan.stl")
+good = save(box([-10, -5, 0.25], [10, 5, 3]), "slider_ok.stl")
+flush = save(box([-10, -5, 0.0], [10, 5, 3]), "slider_flush.stl")
+tight = save(box([-10, -5.15, 0.25], [10, 5, 3]), "slider_tight.stl")
+def chk(m, **g): return V.check_gap_min(m, {"gap_min": {"between": m, "and": chan, "min_mm": 0.25, **g}}, T)
+r = chk(good, path=[[0, 0, 0], [9, 0, 0]], steps=3); assert r[0] == "PASS", r
+r = chk(flush); assert r[0] == "FAIL" and "touch" in r[2], r
+r = chk(flush, stops=[[[-21, -5.5, -0.1], [21, 5.5, 0.1]]]); assert r[0] == "PASS", r
+r = chk(tight); assert r[0] == "FAIL" and "gap 0.10" in r[2], r
+r = chk(good, path=[[0, 0, 0], [12, 0, 0]], steps=4); assert r[0] == "FAIL" and "collide" in r[2], r
+body = save(box([-15, -8, 0], [15, 8, 4]), "plate_body.stl")
+txt_bed = save(box([-8, -3, 0], [8, 3, 0.6]), "plate_text.stl")
+out = os.path.join(T, "plate_set.3mf")
+p = subprocess.run([sys.executable, "export3mf.py", "--piece", f"plate={body}@1,{txt_bed}@2", "--piece", f"stand={good}@1", "--supports", "off", "--no-orca",
+                    "--out", out, "--expect", json.dumps({"pieces": 2, "filaments": 2, "supports": "off", "visible_from_top": ["text"]})], capture_output=True, text=True)
+assert p.returncode == 1 and "only on the bed face" in p.stdout and "2 piece(s), filament slot(s) 1, 2" in p.stdout, p.stdout + p.stderr
+txt_top = save(box([-8, -3, 3.4], [8, 3, 4.0]), "plate_text_top.stl")
+p = subprocess.run([sys.executable, "export3mf.py", "--piece", f"plate={body}@1,{txt_top}@2", "--supports", "off", "--no-orca", "--out", out,
+                    "--expect", json.dumps({"pieces": 1, "filaments": 2, "visible_from_top": ["text"]})], capture_output=True, text=True)
+assert p.returncode == 0 and "MATCHES THE ASK" in p.stdout, p.stdout + p.stderr
+PY2
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

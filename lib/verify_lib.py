@@ -356,10 +356,52 @@ def check_fits(path, c, spec_dir):
     inter = res["info"]["interference"]["volume_mm3"]; gap = res["info"]["min_gap_mm"]
     if inter > 0.5:
         return "FAIL", inter, f"the object collides with the part ({inter:g} mm3 overlap)"
+    touch = res["info"]["touching_mm2"]
+    # touching is reported, never folded into a pass: a face at 0 mm is a different part from one at the clearance
+    tnote = "" if touch <= 0.5 or c.get("touch_ok") else f"; {touch:g} mm2 touching (0 mm) at {res['info']['touching_bbox']}"
+    tst = "PASS" if not tnote else "WARN"
     if gap is None:
-        return "PASS", 0.0, f"the object seats against the part (touching, no overlap)"
+        return tst, 0.0, "the object only touches the part (0 mm gap, no overlap)" + ("" if c.get("touch_ok") else ': add "touch_ok": true if that seat is deliberate')
     ok = gap >= clr - 0.02
-    return ("PASS" if ok else "FAIL"), round(gap, 3), f"{gap:.2f} mm clearance around the object, wanted ≥ {clr:g}" + ("" if ok else ": too tight")
+    return ("FAIL" if not ok else tst), round(gap, 3), f"{gap:.2f} mm clearance around the object, wanted ≥ {clr:g}" + ("" if ok else ": too tight") + tnote
+
+
+def check_gap_min(path, c, spec_dir):
+    """{"gap_min": {"between": "plug.stl", "and": "socket.stl", "min_mm": 0.25 | "fit": "slide_gap",
+                    "path": [[0,0,0], [0,0,-12]], "steps": 6, "region": [[lo],[hi]], "stops": [[[lo],[hi]]]}}
+    "between" moves along "path" (rest -> end of travel, sub-sampled); "self" = the STL being verified.
+    FAIL on any pose where faces collide, TOUCH (0 mm) outside a tagged stop, or sit closer than min_mm."""
+    g = c["gap_min"]
+    def resolve(p):
+        if p in (None, "self"):
+            return path
+        return p if os.path.isabs(p) else os.path.join(spec_dir or os.path.dirname(os.path.abspath(path)), p)
+    pa, pb = resolve(g.get("between")), resolve(g.get("and"))
+    for p in (pa, pb):
+        if not p or not os.path.exists(p):
+            return "FAIL", None, f"part file not found: {p}"
+    if "min_mm" in g:
+        mn, src = float(g["min_mm"]), f"{float(g['min_mm']):g} mm"
+    else:
+        import fit
+        key = g.get("fit", "slide_gap"); mn = float(fit.get(key)); src = f"{mn:g} mm ({key})"
+    region = [g["region"]] if g.get("region") and not isinstance(g["region"][0][0], list) else g.get("region")
+    res = gap_min(load_mesh(pa), load_mesh(pb), mn, _poses(g), region=region, stops=g.get("stops"), min_patch_mm2=float(g.get("min_patch_mm2", 1.0)))
+    bad = [r for r in res if r["collides"] or r["touches"] or r["too_tight"]]
+    gaps = [r["min_gap_mm"] for r in res if r["min_gap_mm"] is not None]
+    if not bad:
+        return "PASS", min(gaps) if gaps else None, f"smallest gap {min(gaps):.2f} mm over {len(res)} positions, wanted ≥ {src}" if gaps else f"no facing faces within reach over {len(res)} positions"
+    r = bad[0]; at = f"at position {r['pose']}" if any(any(x["pose"]) for x in res) else "at rest"
+    if r["collides"]:
+        why = f"parts collide {at} ({r['overlap_mm3']:g} mm3 overlap)"
+    elif r["touches"]:
+        why = f"faces touch with 0 mm gap {at}, {r['touching_mm2']:g} mm2 between {r['touching_bbox'][0]} and {r['touching_bbox'][1]} (they will rub or pinch; tag a deliberate stop under \"stops\")"
+    else:
+        p = r["tight_patches"][0]
+        why = f"gap {p['min_gap_mm']:.2f} mm {at} over {p['mm2']:g} mm2 between {p['bbox'][0]} and {p['bbox'][1]}, wanted ≥ {src}"
+        if len(r["tight_patches"]) > 1:
+            why += f" (+{len(r['tight_patches']) - 1} more tight patches)"
+    return "FAIL", r["min_gap_mm"], why + (f"; {len(bad)} of {len(res)} positions fail" if len(res) > 1 else "")
 
 
 def check_range(value, c, key, label, unit):
@@ -392,13 +434,15 @@ def named_checks(mesh, spec, spec_dir=None):
                 st, val, txt = check_point(mesh, c, "solid_at")
             elif "fits" in c:
                 st, val, txt = check_fits(path, c, spec_dir) if path else ("FAIL", None, "fits check needs the STL path")
+            elif "gap_min" in c:
+                st, val, txt = check_gap_min(path, c, spec_dir) if path else ("FAIL", None, "gap_min check needs the STL path")
             elif "mass_g" in c:
                 st, val, txt = check_range(float(mesh.volume) / 1000 * PLA_G_CM3, c, "mass_g", "about", "g of PLA")
             elif any(k in c for k in RANGE_KEYS):
                 k = next(k for k in RANGE_KEYS if k in c); i, lab, unit = RANGE_KEYS[k]
                 st, val, txt = check_range(float(mesh.extents[i]), c, k, lab, unit)
             else:
-                st, val, txt = "FAIL", None, f"unknown check type {sorted(c)}; known: hole, empty_at, solid_at, fits, height_mm, width_mm, depth_mm, mass_g"
+                st, val, txt = "FAIL", None, f"unknown check type {sorted(c)}; known: hole, empty_at, solid_at, fits, gap_min, height_mm, width_mm, depth_mm, mass_g"
         except Exception as e:                         # a broken check is a failed check, never a silent pass
             st, val, txt = "FAIL", None, f"check could not run ({type(e).__name__}: {e})"
         r = row(str(name), st, val, txt); r["named"] = True; r["plain"] = f"{name}: {txt}"
@@ -527,42 +571,128 @@ def assembly(path_a, path_b, clearance=0.2, move_a=(0, 0, 0), move_b=(0, 0, 0), 
     # (normal-direction clearance = what a printed gap/slip fit means; plain closest-distance would
     # just read ~0 at the edge of any seated contact patch). Contact (<tol) is reported separately.
     R = max(clearance * 6, 3.0)
-    def one_way(src, dst):
-        n = int(np.clip(src.area / 0.25, 2000, 60000))
-        pts, fi = trimesh.sample.sample_surface(src, n, seed=1)
-        nor = src.face_normals[fi]
-        lo2, hi2 = dst.bounds[0] - R, dst.bounds[1] + R
-        sel = np.all((pts >= lo2) & (pts <= hi2), axis=1)
-        pts, nor = pts[sel], nor[sel]
-        back = 0.05                                  # start slightly inside src so seated faces register as d~0
-        d = tri_ray_first_hit(pts - nor * back, nor, dst.triangles) - back
-        w = np.full(len(d), src.area / n)           # mm2 represented by each sample
-        ok = d <= R
-        return d[ok], w[ok]
-    d1, w1 = one_way(a, b); d2, w2 = one_way(b, a)
+    p1, d1, w1 = facing(a, b, R); p2, d2, w2 = facing(b, a, R)
     dall = np.concatenate([d1, d2]); wall_ = np.concatenate([w1, w2])
     seat = 0.0
     gap = None
+    touch_box = None
     if len(dall) == 0:
         rows.append(row("min_gap", "PASS", f">{R:.1f}", "no surfaces face each other within search radius"))
     else:
         touching = dall < tol
         seat = float(wall_[touching].sum() / 2)      # both directions see the same patch
+        if touching.any():
+            tp = np.concatenate([p1, p2])[touching]
+            touch_box = [[round(float(x), 1) for x in tp.min(0)], [round(float(x), 1) for x in tp.max(0)]]
         nontouch = dall[~touching] if allow_contact else dall
         gap = float(nontouch.min()) if len(nontouch) else None
         if inter["volume_mm3"] > 0.5:
             rows.append(row("min_gap", "FAIL", round(float(dall.min()), 3), "parts overlap"))
         elif gap is None:
-            rows.append(row("min_gap", "PASS", 0.0, "parts only touch (seated contact)"))
+            rows.append(row("min_gap", "WARN", 0.0, "parts only touch (0 mm gap everywhere they face): fine for a seat, a pinch for anything that moves"))
         else:
             okg = gap >= clearance - tol
             rows.append(row("min_gap", "PASS" if okg else "FAIL", round(gap, 3),
                             f"closest facing surfaces along normals; need >= {clearance} mm clearance" + ("" if okg else " -> too tight to print/assemble: enlarge by that clearance")))
         if allow_contact:
-            rows.append(row("seated_contact_mm2", "PASS", round(seat, 1), "surface within 0.02 mm (lid resting on rim etc.), not counted as a fault"))
+            # touching is its own finding, never a silent pass: 0 mm overlap and 0.25 mm gap are different parts
+            rows.append(row("touching_mm2", "WARN" if seat > 0.5 else "PASS", round(seat, 1),
+                            f"faces touching (0 mm gap) at {touch_box}: OK only for a deliberate seat or stop; a sliding or snapping face here rubs"
+                            if seat > 0.5 else "no faces touching"))
     status = "FAIL" if any(r["status"] == "FAIL" for r in rows) else "PASS"
     return {"status": status, "info": {"a": str(path_a), "b": str(path_b), "move_a": list(move_a), "move_b": list(move_b),
-                                      "clearance": clearance, "interference": inter, "min_gap_mm": gap}, "checks": rows}
+                                      "clearance": clearance, "interference": inter, "min_gap_mm": gap,
+                                      "touching_mm2": round(seat, 1), "touching_bbox": touch_box}, "checks": rows}
+
+
+def facing(src, dst, R, back=0.05):
+    """sample src's surface, cast each point along its OUTWARD normal onto dst -> (points, distance, mm2 per sample),
+    kept only where dst is within R. Normal-direction clearance = what a printed slip fit means; plain closest-distance
+    would read ~0 at the edge of any seated contact patch. Starting `back` inside src makes flush faces read d ~ 0."""
+    n = int(np.clip(src.area / 0.25, 2000, 60000))
+    pts, fi = trimesh.sample.sample_surface(src, n, seed=1)
+    nor = src.face_normals[fi]
+    lo2, hi2 = dst.bounds[0] - R, dst.bounds[1] + R
+    sel = np.all((pts >= lo2) & (pts <= hi2), axis=1)
+    pts, nor = pts[sel], nor[sel]
+    d = tri_ray_first_hit(pts - nor * back, nor, dst.triangles) - back
+    w = np.full(len(d), src.area / n)
+    ok = d <= R
+    return pts[ok], d[ok], w[ok]
+
+
+def _in_boxes(P, boxes):
+    m = np.zeros(len(P), bool)
+    for lo, hi in boxes or []:
+        m |= np.all((P >= np.array(lo, float) - 1e-6) & (P <= np.array(hi, float) + 1e-6), axis=1)
+    return m
+
+
+def gap_min(mover, fixed, min_mm, poses, region=None, stops=None, tol=0.02, overlap_mm3=0.5, min_patch_mm2=1.0):
+    """every pose: the mover (moved by that pose) vs the fixed part. Three separate findings per pose:
+    collides (solid overlap), touching (faces at 0 mm, outside a tagged stop), too tight (facing gap < min_mm).
+    region = [[lo],[hi]] boxes (fixed-part coords, after the move) limiting which faces are judged (e.g. just the arm);
+    stops = boxes where touching/tightness is deliberate (a seat, a lock face). A too-tight finding needs a patch of at least
+    min_patch_mm2 (a real face, not one grazing sample on a rounded edge). -> list of per-pose dicts."""
+    R = max(min_mm * 6, 3.0)
+    out = []
+    for pose in poses:
+        m = mover.copy(); m.apply_translation(pose)
+        lo = np.maximum(m.bounds[0], fixed.bounds[0]) - 0.5; hi = np.minimum(m.bounds[1], fixed.bounds[1]) + 0.5
+        vol = 0.0
+        if np.all(hi > lo):
+            pitch = max(0.1, (float(np.prod(hi - lo)) / 2.5e7) ** (1 / 3))
+            vol = float((voxel_inside(m, lo, hi, pitch) & voxel_inside(fixed, lo, hi, pitch)).sum() * pitch ** 3)
+        p1, d1, w1 = facing(m, fixed, R); p2, d2, w2 = facing(fixed, m, R)
+        P = np.concatenate([p1, p2]); D = np.concatenate([d1, d2]); W = np.concatenate([w1, w2])
+        if region:
+            keep = _in_boxes(P, region); P, D, W = P[keep], D[keep], W[keep]
+        live = ~_in_boxes(P, stops)
+        P, D, W = P[live], D[live], W[live]
+        touch = D < tol
+        t_mm2 = float(W[touch].sum() / 2)              # both directions see the same patch
+        free = D[~touch]
+        g = float(free.min()) if len(free) else None
+        tb = _bbox(P[touch]) if touch.any() else None
+        patches = _patches(P, D, W, (D >= tol) & (D < min_mm - tol))
+        big = [p for p in patches if p["mm2"] >= min_patch_mm2]
+        out.append({"pose": [round(float(x), 3) for x in pose], "overlap_mm3": round(vol, 2), "touching_mm2": round(t_mm2, 1),
+                    "touching_bbox": tb, "min_gap_mm": None if g is None else round(g, 3), "tight_patches": big,
+                    "collides": vol > overlap_mm3, "touches": t_mm2 > 0.5, "too_tight": bool(big)})
+    return out
+
+
+def _bbox(Q):
+    return [[round(float(x), 2) for x in Q.min(0)], [round(float(x), 2) for x in Q.max(0)]]
+
+
+def _patches(P, D, W, sel, link_mm=1.0):
+    """group the too-close samples into surface patches (single linkage, 1 mm) -> [{mm2, min_gap_mm, bbox}], biggest first.
+    Area, not sample count, decides: one grazing sample at a rounded edge is not a pinched face."""
+    if not sel.any():
+        return []
+    Q, d, w = P[sel], D[sel], W[sel]
+    if len(Q) > 4000:                                  # keep the linkage cheap; weights scale up to the same area
+        k = np.random.default_rng(0).choice(len(Q), 4000, replace=False); w = w[k] * len(Q) / 4000; Q, d = Q[k], d[k]
+    if len(Q) == 1:
+        lab = np.array([1])
+    else:
+        from scipy.cluster.hierarchy import fcluster, linkage
+        lab = fcluster(linkage(Q, "single"), link_mm, "distance")
+    out = [{"mm2": round(float(w[lab == l].sum() / 2), 1), "min_gap_mm": round(float(d[lab == l].min()), 3), "bbox": _bbox(Q[lab == l])}
+           for l in np.unique(lab)]
+    return sorted(out, key=lambda p: -p["mm2"])
+
+
+def _poses(c):
+    """"path": [[x,y,z], ...] waypoints (default [move] or [0,0,0]); "steps" sub-poses between each pair (default 6)."""
+    way = [list(map(float, p)) for p in (c.get("path") or [c.get("move", [0, 0, 0])])]
+    steps = int(c.get("steps", 6))
+    poses = [way[0]]
+    for a_, b_ in zip(way, way[1:]):
+        a_, b_ = np.array(a_), np.array(b_)
+        poses += [list(a_ + (b_ - a_) * k / steps) for k in range(1, steps + 1)]
+    return poses
 
 
 def format_plain(res):

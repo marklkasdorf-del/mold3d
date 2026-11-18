@@ -56,7 +56,7 @@ No `$FORGE/.venv-cad`? Run `MOLD3D_DIR="$FORGE" bash $FORGE/install.sh` first (s
 1. Collect what the user already told you (device model, measurements, photos).
 2. **Reference pass** for anything with a name: look at 6-9 reference images or top designs; write "## Form" in spec.md (proportions, 2-3 signature features, variant).
 3. Dimensions: look up, never recall: `forge parts-find "<part>" [--download]` + `forge step2stl`, datasheets, web search. Cite sources in spec.md. An owned object that can't be looked up: `forge photofit mat`, print at 100%, photo, outline within ~0.3 mm.
-4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/): every fit number under `fit` with its source, and each requirement as a named check under `checks` (`hole`, `empty_at`, `solid_at`, `fits`, `height_mm`; `reference/spec-checks.md`). `forge verify` prints them PASS/FAIL in plain words; done = all green.
+4. Questionnaire for what is left. Write `mold3d/<name>/spec.md` + `spec.json` (templates/): every fit number under `fit` with its source, and each requirement as a named check under `checks` (`hole`, `empty_at`, `solid_at`, `fits`, `gap_min`, `height_mm`; `reference/spec-checks.md`). Every moving part gets a `gap_min` against each part it slides or snaps in, from `fit.slide_gap`/`pip_gap`, with seats and lock faces tagged as `stops`. `forge verify` prints them PASS/FAIL in plain words; done = all green.
 
 ## Phase 2: LANE + PLAN
 b123d (default: functional, dimensioned, fit-critical; `templates/part_b123d.py`), scad (trivial or BOSL2), sdf (`lib/sculpt.py`, organic), mesh (`lib/meshkit.py`: edit downloads, big booleans, flexify, split), bpy (renders, text art). Plan in comments at the top of the part file: features as functions, a parameter block in mm, clearances from `fit.get("pip_gap"/"slide_gap"/"hole_comp"...)` (never hard-code 0.3 or hole sizes), origin bottom-centre on Z=0, print orientation designed in (largest flat face down, overhangs <= 45 deg, bridges < 18 mm, walls >= 2.0).
@@ -74,8 +74,9 @@ Print-in-place gaps come from `fit.json`; calibration steps in `reference/mech-r
 1. `forge preflight <stl> [--orient]` gives the verdict and supports decision; `forge heat <stl>` shows it.
 2. **Supports = preflight's call:** GO -> off; GO+SUPPORTS -> on/auto; NO-GO -> fix first (knife-edge contact, fused gaps, doesn't fit -> `forge split`). "SUPPORTS: OFF (required)" = auto-support trap: supports must stay OFF or they weld the gap. If NO-GO because it needs supports AND supports would weld, fix the geometry (chamfer flat undersides to 45 deg, re-orient) before exporting.
 3. **Print-in-place / multi-body: `forge preflight <stl>` then `forge export <stl>`** (name ends `_SUPPORTS-OFF.3mf` or `_SUPPORTS-ON.3mf`). Tell the user: open this file, check the Support box matches the filename, change nothing else. Single-body parts can go as the STL.
-4. Slice in the user's slicer with that supports decision. Optional `slicer_cmd` in `knowledge/printer.json` adds time and grams to the report.
-5. Never start a print without the user's OK ("Bed clear? Starting <name>, ~<time>, <g> g.").
+4. **Multi-colour or more than one piece:** `forge export --piece NAME=body.stl@1,text.stl@2 --piece ... --expect '{"pieces":N,"filaments":N,"visible_from_top":["text"]}'` puts every piece on one plate with its parts on their filament slots. **Before sending ANY file, run `forge contents <3mf> --expect '<the ask>'`** (export runs it) and send only on `MATCHES THE ASK`. The hand-off lists what is in the file (pieces, colours, supports) and says where hidden features are ("the text is on the bed face: flip the print to see it"). `NOT SLICER-CHECKED` from the export means the slicer CLI did not open it: say that in one line, never imply it was checked.
+5. Slice in the user's slicer with that supports decision. Optional `slicer_cmd` in `knowledge/printer.json` adds time and grams to the report.
+6. Never start a print without the user's OK ("Bed clear? Starting <name>, ~<time>, <g> g.").
 
 ## Finish every design with the Print Report
 Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or a plain `<file>.stl`). It collects the print-ready 3MF (supports decision baked in), `preview.png` (if a render exists or Blender is installed) and `report.json`, and prints the table below filled from tool output. Show it verbatim in chat with one sentence above it and nothing else; if you re-fill it from `report.json`, keep this shape, drop rows whose data is absent, and invent nothing:
@@ -105,8 +106,11 @@ After a print ask "What was off? (fit / looks / strength / print quality / nothi
 
 ## STOP-AND-CHECK (before each render and before "done")
 - [ ] `forge verify` all green (axis/centre/units, components, named checks) - [ ] every boolean has a volume delta
-- [ ] walls >= 2.0 - [ ] movers: selftest PASS, controls jam, gaps ~= fit.pip_gap - [ ] preflight GO/GO+SUPPORTS
+- [ ] walls >= 2.0 - [ ] movers: selftest PASS, controls jam, `gap_min` green for every mover vs every mating part (touching = red) - [ ] preflight GO/GO+SUPPORTS
 - [ ] named object: reference pass done, Looks >= 30% (if AI env) - [ ] every `fit` number sourced (no NOT FIT-CHECKED stamp, or the fix offered) - [ ] claimed with numbers
+
+## When a print fails
+Measure before naming a cause: compare the files (triangle counts, `forge verify`, `gap_min`, the source numbers) and only then say what went wrong. A cause stated without a measurement is a guess; say "checking" instead.
 
 ## Boundaries
 Reliable: functional parts with real numbers, print-in-place mechanisms, looked-up standard parts, Gridfinity, photo-fit pockets, flexify. Soft: text->3D detail. Unreliable: hand-modeled organic/iconic forms, threads, linkages with > 5 moving parts.

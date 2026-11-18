@@ -33,6 +33,7 @@ The key is the requirement in your words; it becomes the first half of the print
 | `empty_at` | the point must be open space (a cutout, a channel, the inside of a pocket) | `{"empty_at": [0, -25, 10]}` -> `USB-C cutout is open: open at (0, -25, 10)` |
 | `solid_at` | the point must be inside plastic (a floor, a boss, a wall that must exist) | `{"solid_at": [0, 0, 1.2]}` -> `floor is solid under the pod: solid at (0, 0, 1.2)` |
 | `fits` | an object dummy STL (`forge step2stl`, `forge photofit`, a cylinder you export), moved into place with `move`, must not collide and must have `clearance` all round | `{"fits": "pod_dummy.stl", "clearance": 0.3, "move": [0, 0, 2.4]}` -> `pod drops in with clearance: 0.31 mm clearance around the object, wanted ≥ 0.3` |
+| `gap_min` | every face where a mover meets another part keeps at least `min_mm` (or `"fit": "slide_gap"` / `"pip_gap"` from fit.json) at rest, at the end of travel and along the `path` between (`steps` sub-positions per leg, default 6). Three separate failures: **collide** (solid overlap), **touch** (faces at 0 mm: a zero-overlap contact is never a pass), **too tight** (a patch ≥ `min_patch_mm2`, default 1 mm2, closer than the minimum). `stops` = boxes where touching is deliberate (a seat, a lock face); `region` = boxes limiting which faces count. `between`/`and` are STLs relative to the spec (`"self"` = the verified STL), both in assembled coordinates. | `{"gap_min": {"between": "plug_seated.stl", "and": "socket.stl", "fit": "slide_gap", "path": [[0,0,0],[-12,0,0]], "stops": [[[-1,-10,32.7],[20,10,33.3]]]}}` -> `arm slides free: gap 0.05 mm at rest over 19.3 mm2 between [4.1, 4.52, 25.02] and [8.99, 4.75, 31.97], wanted ≥ 0.25 mm (slide_gap)` |
 | `height_mm`, `width_mm`, `depth_mm` | one extent inside `[lo, hi]` (Z, X, Y) | `{"height_mm": [40, 42]}` -> `tall enough for the pod: height 41.0 mm, wanted 40 to 42` |
 | `mass_g` | PLA mass estimate inside `[lo, hi]` | `{"mass_g": [15, 21]}` |
 
@@ -41,6 +42,8 @@ Rules the checker keeps:
 - `hole` fails with `no hole at (x, y): the part is solid there` when there is no hole, `nothing around (x, y)` when it is open space, and says `it does not go all the way through` for a blind hole.
 - Coordinates are the STL's: origin bottom-centre, Z up (the templates build that way).
 - `fits` paths are relative to the spec's folder.
+- Touching is its own finding. `fits` turns a 0 mm contact into a WARN with where it is (add `"touch_ok": true` for a deliberate seat); `gap_min` FAILs it unless the spot is inside a tagged stop. A check that only measures overlap reads 0 mm and 0.25 mm the same, which is how click fidget v6 passed with its arm flush against the socket.
+- Every moving part needs a `gap_min` per mating part: an overlap/collision check alone does not prove clearance.
 
 ## Reading the output
 ```
