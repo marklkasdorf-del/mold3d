@@ -36,6 +36,25 @@ def _decimate(meshes):
             except Exception:
                 pass                                              # non-manifold etc: draw every face (slower, still correct)
         out.append((V, F, rgb))
+    return _subdivide(out)
+
+
+def _subdivide(parts):
+    """Painter's sort orders faces by mean depth, which fails for big flat faces next to small raised ones (letters on a plate).
+    Chopping long edges makes every face small, so the mean-depth order is right. Capped so a sheet stays fast."""
+    allv = np.vstack([V for V, _, _ in parts]); diag = float(np.linalg.norm(allv.max(0) - allv.min(0))) or 1.0
+    out = []
+    for V, F, rgb in parts:
+        try:
+            import trimesh
+            for div in (60, 30, 15):                              # coarser if it would explode the face count
+                V2, F2 = trimesh.remesh.subdivide_to_size(V, F, max_edge=diag / div)
+                if len(F2) <= 120000:
+                    V, F = np.asarray(V2, float), np.asarray(F2, int)
+                    break
+        except Exception:
+            pass
+        out.append((V, F, rgb))
     return out
 
 

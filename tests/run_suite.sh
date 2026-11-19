@@ -128,7 +128,7 @@ for lid in slide press; do
   c=$("$CAD" make.py box 80 60 40 --lid $lid --label TEST 2>/dev/null | python3 -c "import json,sys;t=sys.stdin.read();print(json.loads(t[t.find('{'):])['check']['ok'])")
   [ "$c" = "True" ] && ok "make box ($lid lid): fits, $( [ $lid = slide ] && echo 'slides out clear + lift jams' || echo 'snug lip')" || no "make box $lid" "$c"
 done
-"$CAD" make.py keychain "TEST" > /dev/null 2>&1
+"$CAD" make.py keychain "TEST" --colors 1 > /dev/null 2>&1
 k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_test 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['items'])")
 [ "${k:-0}" -ge 20 ] && ok "plate --fill packs $k keychains on one bed" || no "plate" "$k items"
 
@@ -141,6 +141,19 @@ import sys, trimesh; from build123d import import_step
 d = sys.argv[1]; vs = import_step(d + "/keychain.step").volume; vm = trimesh.load(d + "/keychain.stl").volume
 assert abs(vs - vm) / vm < 0.005, (vs, vm)
 PY
+
+# 6e two-colour keychain: base top = text bottom = 3.00 mm, no overlap, same volume as 1-colour; report 3MF has 2 slots, text visible from top
+"$CAD" make.py keychain "DUO" --colors 1 > /dev/null 2>&1; "$CAD" make.py keychain "DUO" --colors 2 > /dev/null 2>&1
+"$CAD" - "$MOLD3D_OUT/make" <<'PY' && ok "2-colour keychain: base top = text bottom = 3.00, overlap < 0.01 mm3, volume = 1-colour within 1 %" || no "2-colour keychain" "known answers differ"
+import sys, trimesh
+d = sys.argv[1]; base = trimesh.load(d + "/keychain_DUO_2c/base.stl"); text = trimesh.load(d + "/keychain_DUO_2c/text.stl")
+assert abs(base.bounds[1][2] - 3.0) < 0.01 and abs(text.bounds[0][2] - 3.0) < 0.01, (base.bounds, text.bounds)
+assert base.intersection(text, engine="manifold").volume < 0.01
+one = trimesh.load(d + "/keychain_DUO/keychain.stl"); assert abs(base.volume + text.volume - one.volume) / one.volume < 0.01
+PY
+"$CAD" report.py "$MOLD3D_OUT/make/keychain_DUO_2c" --no-preview > "$T/duo.log" 2>&1
+f=$(ls "$MOLD3D_OUT"/make/keychain_DUO_2c/*_SUPPORTS-OFF.3mf 2>/dev/null | head -1)
+"$CAD" contents3mf.py "$f" --expect '{"pieces":1,"filaments":2,"visible_from_top":["text"]}' 2>&1 | grep -q "MATCHES THE ASK" && ok "2-colour keychain report -> one SUPPORTS-OFF 3MF, 2 slots, text visible from top" || no "2-colour 3MF" "see $T/duo.log"
 
 # 7 forge report: plain STL -> report.json with verdict + supports + files; bridge30 needs supports (3MF ON); fitcard-style mech.json folder adds moving parts
 mkdir -p "$T/rep"; cp "$T/bridge30.stl" "$T/rep/bridge30.stl"

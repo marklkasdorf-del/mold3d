@@ -244,6 +244,11 @@ def gather_pieces(a, out_dir, mk):
     for pc in pieces:
         ms = [(pn, trimesh.load(f, force="mesh"), int(sl)) for pn, f, sl in pc["parts"]]
         joined = trimesh.util.concatenate([m for _, m, _ in ms])
+        if len(ms) > 1:                               # parts of one piece touch on purpose (text sits on its base): judge them fused, not as loose bodies
+            try:
+                joined = trimesh.boolean.union([m for _, m, _ in ms], engine="manifold")
+            except Exception:
+                pass
         pstl = os.path.join(sub, pc["name"] + ".stl"); joined.export(pstl)
         R, how = get_preflight(sub, pstl, a.fresh, a.allow_tight)
         prs.append((pc["name"], R, how)); mesh_sets.append(ms)

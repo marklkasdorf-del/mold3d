@@ -2,8 +2,8 @@
 """make: generators for things you actually need, from YOUR numbers. venv: .venv-cad. All clearances come from fit.json.
 
   forge make box W D H [--lid slide|press] [--divs 2x1] [--label "PODS"] [--snap] [--round 3]   (inner size, mm)
-  forge make keychain "HELLO" [--size 12] [--hole 4.5]
-  forge make sign "MY SHOP" [--w 140 --h 40] [--holes 2] [--border]
+  forge make keychain "HELLO" [--size 12] [--hole 4.5] [--colors 1|2]
+  forge make sign "MY SHOP" [--w 140 --h 40] [--holes 2] [--border] [--colors 1|2]
   forge make holder (--outline outline.json | --dims WxDxH) [--mount screws|tape|desk] [--depth 20]
   forge make stand [--device "iPhone Air" | --dims WxT] [--angle 65] [--case 2] [--cable]
   forge make lithophane photo.jpg [--width 100] [--frame]
@@ -152,7 +152,22 @@ def _poly_wire(w, step=0.2):
     return Wire.make_polygon([w.position_at(i / n) for i in range(n)], close=True)
 
 
-def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0):
+def default_colors():
+    """2 when the active printer profile has more than one filament slot (printer.json "filament_slots"), else 1."""
+    try:
+        import printer
+        return 2 if int(printer.load().get("filament_slots", 1)) > 1 else 1
+    except Exception:
+        return 1
+
+
+def _two_colour(name, base, text, recipe, info):
+    info = dict(info, expect={"visible_from_top": ["text"]})
+    return save(name + "_2c", {"base": base, "text": text}, recipe, info,
+                pieces=[{"name": name.split("_")[0], "parts": [["base", "base", 1], ["text", "text", 2]]}])
+
+
+def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0, colors=1):
     sk = T(text, size)
     plate2d = offset(sk, margin, kind=Kind.ARC)
     fs = plate2d.faces()
@@ -164,28 +179,39 @@ def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0):
     ring_c = (bb.min.X - hole / 2 - 0.6, (bb.min.Y + bb.max.Y) / 2)
     ring = Pos(*ring_c) * Circle(hole / 2 + 3.0)
     base = extrude(plate2d + ring, plate_t)
-    base = fillet(base.edges().group_by(Axis.Z)[-1], 0.8) if False else base
     base -= Pos(*ring_c, 0) * Cylinder(hole / 2, plate_t * 3, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     raised = Pos(0, 0, plate_t) * extrude(sk, text_h)
+    name = f"keychain_{''.join(c for c in text if c.isalnum())[:16]}"
+    if colors == 2:
+        k = base + raised
+        sz = k.bounding_box().size
+        return _two_colour(name, base, raised, "flat, no supports; text prints on filament slot 2 (no pause needed)",
+                           {"size_mm": [round(v, 1) for v in (sz.X, sz.Y, sz.Z)], "colors": 2})
     k = base + raised
-    return save(f"keychain_{''.join(c for c in text if c.isalnum())[:16]}", {"keychain": k},
+    return save(name, {"keychain": k},
                 f"flat, no supports; tip: pause at {plate_t:.1f} mm and swap filament for 2-colour letters",
                 {"size_mm": [round(v, 1) for v in (k.bounding_box().size.X, k.bounding_box().size.Y, k.bounding_box().size.Z)],
                  "pause_height_mm": plate_t})
 
 
-def sign(text, w=140.0, h=40.0, holes=2, border=True, t=3.0):
+def sign(text, w=140.0, h=40.0, holes=2, border=True, t=3.0, colors=1):
     p = extrude(RectangleRounded(w, h, 4), t)
+    raised = None
     if border:
-        p += Pos(0, 0, t) * extrude(RectangleRounded(w - 3, h - 3, 3) - RectangleRounded(w - 7, h - 7, 2), 1.2)
+        raised = Pos(0, 0, t) * extrude(RectangleRounded(w - 3, h - 3, 3) - RectangleRounded(w - 7, h - 7, 2), 1.2)
     size = min(h * 0.45, (w - 14 - (24 if holes else 0)) / max(3, len(text)) * 1.45)
-    p += Pos(0, 0, t) * extrude(T(text, size), 1.2)
+    letters = Pos(0, 0, t) * extrude(T(text, size), 1.2)
+    raised = letters if raised is None else raised + letters
     if holes:
         for sx in (-1, 1)[:holes] if holes <= 2 else (-1, 1):
             x = sx * (w / 2 - 9)
             p -= Pos(x, 0, 0) * Cylinder(1.9, 3 * t, align=(Align.CENTER, Align.CENTER, Align.CENTER))
             p -= Pos(x, 0, t - 1.8) * Cone(1.9, 3.8, 1.8, align=(Align.CENTER, Align.CENTER, Align.MIN))   # countersink (#6 / M3.5)
-    return save(f"sign_{''.join(c for c in text if c.isalnum())[:16]}", {"sign": p},
+    name = f"sign_{''.join(c for c in text if c.isalnum())[:16]}"
+    if colors == 2:
+        return _two_colour(name, p, raised, "flat, no supports; #6 or M3.5 countersunk screws; text and border print on filament slot 2 (no pause needed)",
+                           {"size_mm": [w, h, t + 1.2], "colors": 2})
+    return save(name, {"sign": p + raised},
                 "flat, no supports; #6 or M3.5 countersunk screws; pause at 3.0 mm for 2-colour text",
                 {"size_mm": [w, h, t + 1.2], "pause_height_mm": t})
 
@@ -310,7 +336,7 @@ def main():
     ap.add_argument("--snap", action="store_true"); ap.add_argument("--round", type=float, default=3.0)
     ap.add_argument("--size", type=float, default=12.0); ap.add_argument("--hole", type=float, default=4.5)
     ap.add_argument("--w", type=float, default=140.0); ap.add_argument("--h", type=float, default=40.0)
-    ap.add_argument("--holes", type=int, default=2); ap.add_argument("--border", action="store_true")
+    ap.add_argument("--holes", type=int, default=2); ap.add_argument("--colors", type=int, choices=[1, 2], default=None, help="keychain/sign: 2 = base + text as separate filament slots (default 2 on a multicolour printer profile)"); ap.add_argument("--border", action="store_true")
     ap.add_argument("--outline"); ap.add_argument("--dims"); ap.add_argument("--mount", default="screws")
     ap.add_argument("--depth", type=float); ap.add_argument("--device"); ap.add_argument("--angle", type=float, default=65.0)
     ap.add_argument("--case", type=float, default=2.0); ap.add_argument("--no-cable", action="store_true")
@@ -335,9 +361,9 @@ def main():
         if a.what == "box":
             W, D, H = (num(v) for v in a.args[:3]); box(W, D, H, a.lid, a.divs, a.label, a.snap, a.round)
         elif a.what == "keychain":
-            keychain(a.args[0], a.size, a.hole)
+            keychain(a.args[0], a.size, a.hole, colors=a.colors or default_colors())
         elif a.what == "sign":
-            sign(a.args[0], a.w, a.h, a.holes, a.border)
+            sign(a.args[0], a.w, a.h, a.holes, a.border, colors=a.colors or default_colors())
         elif a.what == "holder":
             holder(a.outline, a.dims, a.mount, a.depth)
         elif a.what == "stand":
