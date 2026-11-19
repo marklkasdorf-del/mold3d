@@ -99,13 +99,22 @@ def cmd_run(a):
         if a.section: rc += ["--section", a.section]
         if a.ref: rc += ["--ref", a.ref]
         if a.eevee: rc += ["--eevee"]
-        p = subprocess.run(rc, capture_output=True, text=True)
-        open(os.path.join(od, "render.log"), "w").write(p.stdout + p.stderr)
-        os.remove(summ)
-        render_ok = p.returncode == 0 and os.path.exists(os.path.join(od, "sheet.png"))
+        if forge_env.find_blender():
+            p = subprocess.run(rc, capture_output=True, text=True)
+            open(os.path.join(od, "render.log"), "w").write(p.stdout + p.stderr)
+            render_ok = p.returncode == 0 and os.path.exists(os.path.join(od, "sheet.png"))
+        else:
+            p = None; render_ok = False
+        if os.path.exists(summ): os.remove(summ)
         if not render_ok:
-            rows.append(V.row("render", "FAIL", None, "previews are off (Blender isn't installed or didn't start). Everything else works. See %s/render.log; exit 139 = Blender crashed (re-run outside an agent sandbox)" % od))
-            print(p.stdout[-800:], p.stderr[-800:])
+            try:                                      # Blender off / crashed: Quick View still gives a picture (never a FAIL row)
+                import quickview, trimesh
+                m = trimesh.load(stl, force="mesh")
+                quickview.sheet([(m, quickview.SLOT[1])], os.path.join(od, "sheet.png"), name, [float(x) for x in m.extents])
+                rows.append(V.row("render", "PASS", None, "quick view (Blender off here); full annotated views need Blender"))
+            except Exception as e:
+                rows.append(V.row("render", "WARN", None, "previews are off (Blender isn't installed or didn't start, Quick View failed: %s). Everything else works. See %s/render.log" % (type(e).__name__, od)))
+                if p: print(p.stdout[-800:], p.stderr[-800:])
     V.plain_rows(rows, spec)
     res["status"] = "FAIL" if any(r["status"] == "FAIL" for r in rows) else ("WARN" if any(r["status"] == "WARN" for r in rows) else "PASS")
     res["summary"] = {"green": sum(1 for r in rows if r["status"] == "PASS"), "total": len(rows), "not_green": [r["plain"] for r in rows if r["status"] != "PASS"]}
@@ -282,7 +291,7 @@ def cmd_heat(rest):
 # Every sub-script runs with cwd=lib/, so a path the user typed relative to THEIR folder must be made absolute first.
 FILE_EXT = (".stl", ".3mf", ".step", ".stp", ".obj", ".ply", ".glb", ".usdz", ".json", ".jpg", ".jpeg", ".png", ".heic", ".pdf", ".py", ".scad", ".gcode")
 PATH_FLAGS = ("--out", "--output", "-o", "--parts", "--spec", "--ref", "--dst", "--json")   # values are paths even if they don't exist yet
-INPUT_CMDS = ("contents", "verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
+INPUT_CMDS = ("contents", "verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "view", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
 
 
 def absargs(cmd, rest):
@@ -305,6 +314,9 @@ def absargs(cmd, rest):
             k, v = x.split("=", 1); out.append(k + "=" + os.path.abspath(v)); continue
         if x.startswith("-"):
             out.append(x); continue
+        if cmd == "view" and "@" in x:                 # other.stl@2: the part path relative to the caller, @slot kept
+            f, _, sl = x.rpartition("@")
+            out.append(os.path.abspath(f) + "@" + sl); continue
         looks_like_path = os.sep in x or x.lower().endswith(FILE_EXT)
         if cmd in INPUT_CMDS and x.lower().endswith(FILE_EXT) and not os.path.exists(x) and (first_input or cmd == "plate"):
             sys.exit(f"forge {cmd}: file not found: {os.path.abspath(x)}  (paths are relative to {os.getcwd()})")
@@ -337,6 +349,7 @@ COMMANDS = [
         ("fit", "show | set <key> <mm> --from \"...\": the one clearance table for your printer"),
     ]),
     ("Hand off", [
+        ("view", "<stl> [b.stl@2 ...]: quick picture of a model (no Blender needed), writes <stl>_view.png"),
         ("report", "<dir|stl>: the Print Report (verdict, gaps, time, files) plus the print-ready 3MF"),
         ("export", "<stl> [--supports on|off|auto] | --piece NAME=a.stl@1,b.stl@2 ...: 3MF with the supports checkbox (and colour parts) baked in"),
         ("contents", "<3mf> [--expect JSON]: what is really in the file (pieces, colours, supports, what shows from the top) vs what was asked"),
@@ -381,6 +394,7 @@ NEW = {
     "verify": lambda r: _cad("verify_cli.py", r),
     "heat": cmd_heat,
     "report": lambda r: _cad("report.py", r),
+    "view": lambda r: _cad("quickview.py", r),
     "export": lambda r: _cad("export3mf.py", r),
     "contents": lambda r: _cad("contents3mf.py", r),
     "text3d": lambda r: sys.exit(subprocess.run([os.path.join(HERE, "text3d", "text3d.sh")] + r).returncode),

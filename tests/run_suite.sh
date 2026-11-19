@@ -300,4 +300,30 @@ p = subprocess.run([sys.executable, "export3mf.py", "--piece", f"plate={body}@1,
 assert p.returncode == 0 and "MATCHES THE ASK" in p.stdout, p.stdout + p.stderr
 PY2
 
+# 12 quick view: no Blender needed; known silhouettes; run + report produce a picture with BLENDER=none
+Q="$T/qv"; rm -rf "$Q"; mkdir -p "$Q"
+"$CAD" - "$Q" <<'PY' && ok "quickview: 40x20x10 box top aspect 2.00, front aspect 4.00 (+-4 %), iso shows 3 shades; sphere sheet 1200x900 < 10 s" || no "quickview" "known answers differ"
+import sys, time; sys.path.insert(0, '.'); import trimesh, numpy as np, quickview as qv
+o = sys.argv[1]; b = trimesh.creation.box([40, 20, 10]); b.apply_translation([0, 0, 5]); C = (226, 214, 196)
+def fg_aspect(img):
+    a = np.asarray(img.convert("RGB")).astype(int); m = np.abs(a - np.array([246, 241, 231])).sum(2) > 30
+    ys, xs = np.nonzero(m); return (xs.max() - xs.min() + 1) / (ys.max() - ys.min() + 1)
+assert abs(fg_aspect(qv.render_view([(b, C)], "top")) - 2.0) < 0.08
+assert abs(fg_aspect(qv.render_view([(b, C)], "front")) - 4.0) < 0.16
+a = np.asarray(qv.render_view([(b, C)], "iso").convert("L")); vals, cnt = np.unique(a[a < 240], return_counts=True)
+assert (cnt > 0.03 * cnt.sum()).sum() >= 3, "iso view should show 3 differently lit faces"
+s = trimesh.creation.icosphere(6, 15)                       # ~82k faces: exercises the decimation path
+t = time.time(); qv.sheet([(s, C)], o + "/sphere.png", "sphere", [30, 30, 30]); dt = time.time() - t
+from PIL import Image; im = Image.open(o + "/sphere.png"); assert im.size == (1200, 900) and dt < 10, (im.size, dt)
+PY
+rm -f "$T/rep/preview.png"
+BLENDER=none "$CAD" report.py "$T/rep/bridge30.stl" --fresh > "$Q/rep.log" 2>&1
+[ -s "$T/rep/preview.png" ] && ! grep -q "preview.png is off" "$Q/rep.log" && ok "report with BLENDER=none still writes preview.png (Quick View), no 'previews are off' note" || no "report quick view" "see $Q/rep.log"
+cat > "$Q/cube.py" <<'PY'
+import os; from build123d import *
+export_stl(Pos(0, 0, 5) * Box(20, 20, 10), os.environ["FORGE_OUT_STL"])
+PY
+(cd "$Q" && BLENDER=none MOLD3D_OUT="$Q/out" "$F/bin/forge" run cube.py --name cube > "$Q/run.log" 2>&1); rc=$?
+[ $rc = 0 ] && [ -s "$Q/out/cube/sheet.png" ] && ! grep -q '"status": "FAIL"' "$Q/out/cube/verify.json" && ok "forge run with BLENDER=none: exit 0, sheet.png from Quick View, no FAIL row" || no "run quick view" "rc=$rc, see $Q/run.log"
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

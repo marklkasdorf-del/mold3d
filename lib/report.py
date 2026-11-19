@@ -166,31 +166,46 @@ def mech_info(out_dir):
     return info
 
 
-def find_preview(out_dir, stl, allow_render):
+def _quick(dst, name, meshes=None, stl=None):
+    """Quick View (no Blender): meshes = [(trimesh, rgb)], else the single STL in slot 1."""
+    import quickview, trimesh
+    if meshes is None:
+        meshes = [(trimesh.load(stl, force="mesh"), quickview.SLOT[1])]
+    import numpy as np
+    b = np.max([m.bounds[1] for m, _ in meshes], axis=0) - np.min([m.bounds[0] for m, _ in meshes], axis=0)
+    quickview.sheet(meshes, dst, name, [float(x) for x in b])
+    return dst
+
+
+def find_preview(out_dir, stl, allow_render, meshes=None, name=None):
     dst = os.path.join(out_dir, "preview.png")
     if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(stl):
         return dst, None
     stem = os.path.splitext(os.path.basename(stl))[0]
-    for pat in (f"{stem}_hero.png", "poster.png", "sheet.png"):
-        c = os.path.join(out_dir, pat)
-        if os.path.exists(c):
-            shutil.copy(c, dst)
-            return dst, None
+    name = name or stem
+    if meshes is None:                                # a multi-part plate is always drawn by Quick View (it knows the slot colours)
+        for pat in (f"{stem}_hero.png", "poster.png", "sheet.png"):
+            c = os.path.join(out_dir, pat)
+            if os.path.exists(c):
+                shutil.copy(c, dst)
+                return dst, None
     if not allow_render:
         return None, "preview skipped (--no-preview)"
-    if not forge_env.find_blender():
-        return None, "preview.png is off (Blender isn't installed). Everything else works."
-    tmp = os.path.join(out_dir, "_preview_tmp")
-    try:
-        r = subprocess.run([os.path.join(forge_env.ROOT, "bin", "render"), stl, tmp], capture_output=True, text=True, timeout=600)
-        if r.returncode == 0 and os.path.exists(os.path.join(tmp, "sheet.png")):
-            shutil.copy(os.path.join(tmp, "sheet.png"), dst)
-            return dst, None
-        return None, "preview.png is off (Blender didn't start here; inside an agent sandbox re-run outside it). Everything else works."
+    if meshes is None and forge_env.find_blender():
+        tmp = os.path.join(out_dir, "_preview_tmp")
+        try:
+            r = subprocess.run([os.path.join(forge_env.ROOT, "bin", "render"), stl, tmp], capture_output=True, text=True, timeout=600)
+            if r.returncode == 0 and os.path.exists(os.path.join(tmp, "sheet.png")):
+                shutil.copy(os.path.join(tmp, "sheet.png"), dst)
+                return dst, None
+        except Exception:
+            pass
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    try:                                              # Blender missing / failed / skipped: Quick View always works
+        return _quick(dst, name, meshes, stl), None
     except Exception as e:
-        return None, f"preview.png is off ({type(e).__name__}). Everything else works."
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        return None, f"preview.png is off (Quick View failed: {type(e).__name__}). Everything else works."
 
 
 def make_3mf(out_dir, stl, R):
