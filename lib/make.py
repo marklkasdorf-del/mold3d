@@ -56,13 +56,22 @@ def ov(a, b):
     return r.volume if r is not None else 0.0
 
 
-def save(name, parts, recipe, info=None):
+def save(name, parts, recipe, info=None, pieces=None):
     d = os.path.join(OUT, name); os.makedirs(d, exist_ok=True)
-    files = []
+    files, steps = [], []
     for k, s in parts.items():
         f = os.path.join(d, f"{k}.stl"); export_stl(s, f, tolerance=0.01, angular_tolerance=0.08); files.append(f)
+        if k != "assembled":                                      # exact CAD file next to the STL, for editing
+            try:
+                export_step(s, f[:-4] + ".step"); steps.append(f[:-4] + ".step")
+            except Exception as e:
+                print(f"make: could not write {k}.step ({e})", file=sys.stderr)
     info = info or {}
-    info.update({"files": files, "recipe": recipe})
+    if pieces is None:
+        pieces = [{"name": k, "parts": [[k, k, 1]]} for k in parts if k != "assembled"]
+    for pc in pieces:
+        pc["parts"] = [[pn, os.path.join(d, f"{fk}.stl"), sl] for pn, fk, sl in pc["parts"]]
+    info.update({"files": files, "step_files": steps, "pieces": pieces, "recipe": recipe})
     json.dump(info, open(os.path.join(d, "make.json"), "w"), indent=1)
     print(json.dumps(info, indent=1))
     return d
@@ -138,9 +147,19 @@ def box(W, D, H, lid="slide", divs="1x1", label="", snap=False, r=3.0, wall=WALL
 
 
 # ------------------------------------------------------------------ keychain / sign
+def _poly_wire(w, step=0.2):
+    n = max(48, int(w.length / step))
+    return Wire.make_polygon([w.position_at(i / n) for i in range(n)], close=True)
+
+
 def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0):
     sk = T(text, size)
     plate2d = offset(sk, margin, kind=Kind.ARC)
+    fs = plate2d.faces()
+    if len(fs) > 1:                                               # per-letter offsets overlap: fuse them into one plate outline
+        fs = fs[0].fuse(*fs[1:]).clean().faces()
+    # re-draw the outline as a fine polygon (0.2 mm): the raw offset curves do not survive a STEP round trip
+    plate2d = Sketch(Compound([Face(_poly_wire(f.outer_wire()), [_poly_wire(w) for w in f.inner_wires()]) for f in fs]))
     bb = plate2d.bounding_box()
     ring_c = (bb.min.X - hole / 2 - 0.6, (bb.min.Y + bb.max.Y) / 2)
     ring = Pos(*ring_c) * Circle(hole / 2 + 3.0)

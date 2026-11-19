@@ -237,6 +237,9 @@ def gather(a):
     if R.get("print_time") or R.get("grams"):
         rep["slice"] = {k: R[k] for k in ("print_time", "grams") if R.get(k)}
     files = {"stl": stl}
+    stp = os.path.splitext(stl)[0] + ".step"
+    if os.path.exists(stp):
+        files["step"] = stp
     notes = []
     if not a.no_export:
         f3 = make_3mf(out_dir, stl, R)
@@ -329,6 +332,8 @@ def markdown(rep):
         rows.append(("Files", f"`{_home(f['3mf'])}` (print this)"))
     else:
         rows.append(("Files", f"`{_home(f['stl'])}` (not print-ready)"))
+    if "step" in f:
+        rows[-1] = (rows[-1][0], rows[-1][1] + f" · `{os.path.basename(f['step'])}` (CAD, for editing)")
     lines = [" · ".join(head), "| | |", "|---|---|"] + [f"| {k} | {v} |" for k, v in rows]
     return "\n".join(lines)
 

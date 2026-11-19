@@ -135,6 +135,13 @@ k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_te
 # 6c make errors are one plain line + exit 2, never a traceback
 e=$("$CAD" make.py box 30 20 2>&1); rc=$?; [ $rc = 2 ] && echo "$e" | grep -q "needs W D H" && ! echo "$e" | grep -q Traceback && ok "make box with 2 numbers -> plain 'needs W D H', exit 2" || no "make box errors" "rc=$rc: $e"
 
+# 6d make writes an exact STEP alongside: same volume as the STL within 0.5 %
+"$CAD" - "$MOLD3D_OUT/make/keychain_TEST" <<'PY' && ok "make keychain also writes keychain.step (volume = STL within 0.5 %)" || no "make STEP" "missing or volume differs"
+import sys, trimesh; from build123d import import_step
+d = sys.argv[1]; vs = import_step(d + "/keychain.step").volume; vm = trimesh.load(d + "/keychain.stl").volume
+assert abs(vs - vm) / vm < 0.005, (vs, vm)
+PY
+
 # 7 forge report: plain STL -> report.json with verdict + supports + files; bridge30 needs supports (3MF ON); fitcard-style mech.json folder adds moving parts
 mkdir -p "$T/rep"; cp "$T/bridge30.stl" "$T/rep/bridge30.stl"
 "$CAD" report.py "$T/rep/bridge30.stl" --no-preview --json > "$T/rep.log" 2>&1
