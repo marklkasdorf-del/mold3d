@@ -128,9 +128,32 @@ for lid in slide press; do
   c=$("$CAD" make.py box 80 60 40 --lid $lid --label TEST 2>/dev/null | python3 -c "import json,sys;t=sys.stdin.read();print(json.loads(t[t.find('{'):])['check']['ok'])")
   [ "$c" = "True" ] && ok "make box ($lid lid): fits, $( [ $lid = slide ] && echo 'slides out clear + lift jams' || echo 'snug lip')" || no "make box $lid" "$c"
 done
-"$CAD" make.py keychain "TEST" > /dev/null 2>&1
+"$CAD" make.py keychain "TEST" --colors 1 > /dev/null 2>&1
 k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_test 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['items'])")
 [ "${k:-0}" -ge 20 ] && ok "plate --fill packs $k keychains on one bed" || no "plate" "$k items"
+
+# 6c make errors are one plain line + exit 2, never a traceback
+e=$("$CAD" make.py box 30 20 2>&1); rc=$?; [ $rc = 2 ] && echo "$e" | grep -q "needs W D H" && ! echo "$e" | grep -q Traceback && ok "make box with 2 numbers -> plain 'needs W D H', exit 2" || no "make box errors" "rc=$rc: $e"
+
+# 6d make writes an exact STEP alongside: same volume as the STL within 0.5 %
+"$CAD" - "$MOLD3D_OUT/make/keychain_TEST" <<'PY' && ok "make keychain also writes keychain.step (volume = STL within 0.5 %)" || no "make STEP" "missing or volume differs"
+import sys, trimesh; from build123d import import_step
+d = sys.argv[1]; vs = import_step(d + "/keychain.step").volume; vm = trimesh.load(d + "/keychain.stl").volume
+assert abs(vs - vm) / vm < 0.005, (vs, vm)
+PY
+
+# 6e two-colour keychain: base top = text bottom = 3.00 mm, no overlap, same volume as 1-colour; report 3MF has 2 slots, text visible from top
+"$CAD" make.py keychain "DUO" --colors 1 > /dev/null 2>&1; "$CAD" make.py keychain "DUO" --colors 2 > /dev/null 2>&1
+"$CAD" - "$MOLD3D_OUT/make" <<'PY' && ok "2-colour keychain: base top = text bottom = 3.00, overlap < 0.01 mm3, volume = 1-colour within 1 %" || no "2-colour keychain" "known answers differ"
+import sys, trimesh
+d = sys.argv[1]; base = trimesh.load(d + "/keychain_DUO_2c/base.stl"); text = trimesh.load(d + "/keychain_DUO_2c/text.stl")
+assert abs(base.bounds[1][2] - 3.0) < 0.01 and abs(text.bounds[0][2] - 3.0) < 0.01, (base.bounds, text.bounds)
+assert base.intersection(text, engine="manifold").volume < 0.01
+one = trimesh.load(d + "/keychain_DUO/keychain.stl"); assert abs(base.volume + text.volume - one.volume) / one.volume < 0.01
+PY
+"$CAD" report.py "$MOLD3D_OUT/make/keychain_DUO_2c" --no-preview > "$T/duo.log" 2>&1
+f=$(ls "$MOLD3D_OUT"/make/keychain_DUO_2c/*_SUPPORTS-OFF.3mf 2>/dev/null | head -1)
+"$CAD" contents3mf.py "$f" --expect '{"pieces":1,"filaments":2,"visible_from_top":["text"]}' 2>&1 | grep -q "MATCHES THE ASK" && ok "2-colour keychain report -> one SUPPORTS-OFF 3MF, 2 slots, text visible from top" || no "2-colour 3MF" "see $T/duo.log"
 
 # 7 forge report: plain STL -> report.json with verdict + supports + files; bridge30 needs supports (3MF ON); fitcard-style mech.json folder adds moving parts
 mkdir -p "$T/rep"; cp "$T/bridge30.stl" "$T/rep/bridge30.stl"
@@ -141,6 +164,18 @@ d = json.load(open(sys.argv[1] + '/report.json'))
 assert d['preflight']['verdict'] == 'GO+SUPPORTS' and d['preflight']['supports'] == 'on', d['preflight']
 assert d['files']['3mf'].endswith('bridge30_SUPPORTS-ON.3mf') and os.path.exists(d['files']['3mf'])
 assert 'moving_parts' not in d and 'slice' not in d and d['watch_for'], d
+PY
+
+# 7d make box folder (box + lid + assembled.stl) -> one report, 2 pieces, one 3MF that contents confirms
+"$CAD" make.py box 80 60 40 --lid slide > /dev/null 2>&1
+BD="$MOLD3D_OUT/make/box_80x60x40_slide"
+"$CAD" report.py "$BD" --no-preview > "$T/boxrep.log" 2>&1; rc=$?
+"$CAD" - "$BD" <<'PY' && [ $rc = 0 ] && ok "report on a make-box folder: 2 pieces (box, lid), one 3MF, contents matches" || no "multi-part report" "rc=$rc, see $T/boxrep.log"
+import sys, glob, json; sys.path.insert(0, '.'); import contents3mf
+d = sys.argv[1]; r = json.load(open(d + "/report.json"))
+assert [p["name"] for p in r["pieces"]] == ["box", "lid"], r.get("pieces")
+f3 = glob.glob(d + "/*_SUPPORTS-*.3mf"); assert len(f3) == 1, f3
+c = contents3mf.inspect(f3[0]); assert len(c["pieces"]) == 2 and c["filaments"] == [1], c
 PY
 
 # 8 first-five-minutes: the forge CLI from a DIFFERENT folder (relative paths, default output dir, help, doctor cache, Assumed row)
@@ -294,5 +329,31 @@ PY2
 # 12 Moldy persona is wired (cheap file checks)
 grep -A2 "^| The ask" SKILL.md | tail -1 | grep -q "no idea what to print" && grep -q "reference/moldy.md" SKILL.md && grep -q "^## Hard limits" reference/moldy.md && grep -q "Rules that never bend" reference/moldy.md && grep -q "^knowledge/moldy-taste.md" .gitignore && [ -f knowledge/moldy-taste.example.md ] \
   && ok "moldy: idea-chat route is the first row of the route table, SKILL.md points at reference/moldy.md (Hard limits section), taste file git-ignored + committed example" || no "moldy wiring" "route row / reference / .gitignore / template missing"
+
+# 12b quick view: no Blender needed; known silhouettes; run + report produce a picture with BLENDER=none
+Q="$T/qv"; rm -rf "$Q"; mkdir -p "$Q"
+"$CAD" - "$Q" <<'PY' && ok "quickview: 40x20x10 box top aspect 2.00, front aspect 4.00 (+-4 %), iso shows 3 shades; sphere sheet 1200x900 < 10 s" || no "quickview" "known answers differ"
+import sys, time; sys.path.insert(0, '.'); import trimesh, numpy as np, quickview as qv
+o = sys.argv[1]; b = trimesh.creation.box([40, 20, 10]); b.apply_translation([0, 0, 5]); C = (226, 214, 196)
+def fg_aspect(img):
+    a = np.asarray(img.convert("RGB")).astype(int); m = np.abs(a - np.array([246, 241, 231])).sum(2) > 30
+    ys, xs = np.nonzero(m); return (xs.max() - xs.min() + 1) / (ys.max() - ys.min() + 1)
+assert abs(fg_aspect(qv.render_view([(b, C)], "top")) - 2.0) < 0.08
+assert abs(fg_aspect(qv.render_view([(b, C)], "front")) - 4.0) < 0.16
+a = np.asarray(qv.render_view([(b, C)], "iso").convert("L")); vals, cnt = np.unique(a[a < 240], return_counts=True)
+assert (cnt > 0.03 * cnt.sum()).sum() >= 3, "iso view should show 3 differently lit faces"
+s = trimesh.creation.icosphere(6, 15)                       # ~82k faces: exercises the decimation path
+t = time.time(); qv.sheet([(s, C)], o + "/sphere.png", "sphere", [30, 30, 30]); dt = time.time() - t
+from PIL import Image; im = Image.open(o + "/sphere.png"); assert im.size == (1200, 900) and dt < 10, (im.size, dt)
+PY
+rm -f "$T/rep/preview.png"
+BLENDER=none "$CAD" report.py "$T/rep/bridge30.stl" --fresh > "$Q/rep.log" 2>&1
+[ -s "$T/rep/preview.png" ] && ! grep -q "preview.png is off" "$Q/rep.log" && ok "report with BLENDER=none still writes preview.png (Quick View), no 'previews are off' note" || no "report quick view" "see $Q/rep.log"
+cat > "$Q/cube.py" <<'PY'
+import os; from build123d import *
+export_stl(Pos(0, 0, 5) * Box(20, 20, 10), os.environ["FORGE_OUT_STL"])
+PY
+(cd "$Q" && BLENDER=none MOLD3D_OUT="$Q/out" "$F/bin/forge" run cube.py --name cube > "$Q/run.log" 2>&1); rc=$?
+[ $rc = 0 ] && [ -s "$Q/out/cube/sheet.png" ] && ! grep -q '"status": "FAIL"' "$Q/out/cube/verify.json" && ok "forge run with BLENDER=none: exit 0, sheet.png from Quick View, no FAIL row" || no "run quick view" "rc=$rc, see $Q/run.log"
 
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

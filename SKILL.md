@@ -101,7 +101,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 ```
 - Issues are plain English ("first-layer gap under 0.35" becomes "tight gap near the bed may fuse"); never paste preflight jargon or numbers you did not get from the report.
 - No `Print` row unless a slicer hook is set (grams are never estimated from volume). No `Moving parts` / `Gaps` rows for static parts.
-- NO-GO: no 3MF is written; fix the geometry and re-run `forge report`. A red Checks row (exit 4) means the part misses its spec: fix it, never hand it over. Send `preview.png` when the channel supports files. If the notes say previews are off, there is no Blender: say so in one line, everything else still works.
+- NO-GO: no 3MF is written; fix the geometry and re-run `forge report`. A red Checks row (exit 4) means the part misses its spec: fix it, never hand it over. `preview.png` always exists now (Quick View when Blender is off). Send it with SendUserFile (or the channel's file tool) right after the report, every time.
 - The 3MF filename keeps the `_SUPPORTS-OFF` / `_SUPPORTS-ON` suffix: tell the user to open that file and check the Support box matches.
 - Done = the file path, this report, a picture, and one line on what was assumed.
 

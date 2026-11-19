@@ -2,8 +2,8 @@
 """make: generators for things you actually need, from YOUR numbers. venv: .venv-cad. All clearances come from fit.json.
 
   forge make box W D H [--lid slide|press] [--divs 2x1] [--label "PODS"] [--snap] [--round 3]   (inner size, mm)
-  forge make keychain "HELLO" [--size 12] [--hole 4.5]
-  forge make sign "MY SHOP" [--w 140 --h 40] [--holes 2] [--border]
+  forge make keychain "HELLO" [--size 12] [--hole 4.5] [--colors 1|2]
+  forge make sign "MY SHOP" [--w 140 --h 40] [--holes 2] [--border] [--colors 1|2]
   forge make holder (--outline outline.json | --dims WxDxH) [--mount screws|tape|desk] [--depth 20]
   forge make stand [--device "iPhone Air" | --dims WxT] [--angle 65] [--case 2] [--cable]
   forge make lithophane photo.jpg [--width 100] [--frame]
@@ -11,7 +11,7 @@
 Boxes are checked like mechanisms: a slide lid must slide all the way out clear AND jam if you try to lift it.
 Output: ./mold3d/make/<thing>/ with STLs already in their PRINT pose + a one-line recipe.
 """
-import argparse, json, math, os, sys
+import argparse, difflib, json, math, os, re, sys
 from build123d import *
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,11 +25,30 @@ WALL = 2.0                     # minimum wall (mm)
 FONT = "Arial Black"
 
 
+_FONT_WARNED = []
+
+
 def T(txt, size, align=(Align.CENTER, Align.CENTER)):
     try:
         return Text(txt, font_size=size, font=FONT, align=align)
     except Exception:
+        if not _FONT_WARNED:
+            _FONT_WARNED.append(1)
+            print(f'make: font "{FONT}" not found, using the default font', file=sys.stderr)
         return Text(txt, font_size=size, align=align)
+
+
+def parse_dims(s, n):
+    """'70x8' / '60X30*20' / '60×30x20' -> n floats, or a plain ValueError with an example."""
+    ex = "--dims 70x8 (W x T)" if n == 2 else "--dims 60x30x20 (W x D x H)"
+    parts = [q for q in re.split(r"[xX*\u00d7]", str(s).replace(" ", "")) if q != ""]
+    try:
+        v = [float(q) for q in parts]
+    except ValueError:
+        v = []
+    if len(v) != n:
+        raise ValueError(f"--dims {s!r} needs {n} numbers in mm, e.g. {ex}")
+    return v
 
 
 def ov(a, b):
@@ -37,13 +56,22 @@ def ov(a, b):
     return r.volume if r is not None else 0.0
 
 
-def save(name, parts, recipe, info=None):
+def save(name, parts, recipe, info=None, pieces=None):
     d = os.path.join(OUT, name); os.makedirs(d, exist_ok=True)
-    files = []
+    files, steps = [], []
     for k, s in parts.items():
         f = os.path.join(d, f"{k}.stl"); export_stl(s, f, tolerance=0.01, angular_tolerance=0.08); files.append(f)
+        if k != "assembled":                                      # exact CAD file next to the STL, for editing
+            try:
+                export_step(s, f[:-4] + ".step"); steps.append(f[:-4] + ".step")
+            except Exception as e:
+                print(f"make: could not write {k}.step ({e})", file=sys.stderr)
     info = info or {}
-    info.update({"files": files, "recipe": recipe})
+    if pieces is None:
+        pieces = [{"name": k, "parts": [[k, k, 1]]} for k in parts if k != "assembled"]
+    for pc in pieces:
+        pc["parts"] = [[pn, os.path.join(d, f"{fk}.stl"), sl] for pn, fk, sl in pc["parts"]]
+    info.update({"files": files, "step_files": steps, "pieces": pieces, "recipe": recipe})
     json.dump(info, open(os.path.join(d, "make.json"), "w"), indent=1)
     print(json.dumps(info, indent=1))
     return d
@@ -119,35 +147,71 @@ def box(W, D, H, lid="slide", divs="1x1", label="", snap=False, r=3.0, wall=WALL
 
 
 # ------------------------------------------------------------------ keychain / sign
-def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0):
+def _poly_wire(w, step=0.2):
+    n = max(48, int(w.length / step))
+    return Wire.make_polygon([w.position_at(i / n) for i in range(n)], close=True)
+
+
+def default_colors():
+    """2 when the active printer profile has more than one filament slot (printer.json "filament_slots"), else 1."""
+    try:
+        import printer
+        return 2 if int(printer.load().get("filament_slots", 1)) > 1 else 1
+    except Exception:
+        return 1
+
+
+def _two_colour(name, base, text, recipe, info):
+    info = dict(info, expect={"visible_from_top": ["text"]})
+    return save(name + "_2c", {"base": base, "text": text}, recipe, info,
+                pieces=[{"name": name.split("_")[0], "parts": [["base", "base", 1], ["text", "text", 2]]}])
+
+
+def keychain(text, size=12.0, hole=4.5, plate_t=3.0, text_h=1.4, margin=3.0, colors=1):
     sk = T(text, size)
     plate2d = offset(sk, margin, kind=Kind.ARC)
+    fs = plate2d.faces()
+    if len(fs) > 1:                                               # per-letter offsets overlap: fuse them into one plate outline
+        fs = fs[0].fuse(*fs[1:]).clean().faces()
+    # re-draw the outline as a fine polygon (0.2 mm): the raw offset curves do not survive a STEP round trip
+    plate2d = Sketch(Compound([Face(_poly_wire(f.outer_wire()), [_poly_wire(w) for w in f.inner_wires()]) for f in fs]))
     bb = plate2d.bounding_box()
     ring_c = (bb.min.X - hole / 2 - 0.6, (bb.min.Y + bb.max.Y) / 2)
     ring = Pos(*ring_c) * Circle(hole / 2 + 3.0)
     base = extrude(plate2d + ring, plate_t)
-    base = fillet(base.edges().group_by(Axis.Z)[-1], 0.8) if False else base
     base -= Pos(*ring_c, 0) * Cylinder(hole / 2, plate_t * 3, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     raised = Pos(0, 0, plate_t) * extrude(sk, text_h)
+    name = f"keychain_{''.join(c for c in text if c.isalnum())[:16]}"
+    if colors == 2:
+        k = base + raised
+        sz = k.bounding_box().size
+        return _two_colour(name, base, raised, "flat, no supports; text prints on filament slot 2 (no pause needed)",
+                           {"size_mm": [round(v, 1) for v in (sz.X, sz.Y, sz.Z)], "colors": 2})
     k = base + raised
-    return save(f"keychain_{''.join(c for c in text if c.isalnum())[:16]}", {"keychain": k},
+    return save(name, {"keychain": k},
                 f"flat, no supports; tip: pause at {plate_t:.1f} mm and swap filament for 2-colour letters",
                 {"size_mm": [round(v, 1) for v in (k.bounding_box().size.X, k.bounding_box().size.Y, k.bounding_box().size.Z)],
                  "pause_height_mm": plate_t})
 
 
-def sign(text, w=140.0, h=40.0, holes=2, border=True, t=3.0):
+def sign(text, w=140.0, h=40.0, holes=2, border=True, t=3.0, colors=1):
     p = extrude(RectangleRounded(w, h, 4), t)
+    raised = None
     if border:
-        p += Pos(0, 0, t) * extrude(RectangleRounded(w - 3, h - 3, 3) - RectangleRounded(w - 7, h - 7, 2), 1.2)
+        raised = Pos(0, 0, t) * extrude(RectangleRounded(w - 3, h - 3, 3) - RectangleRounded(w - 7, h - 7, 2), 1.2)
     size = min(h * 0.45, (w - 14 - (24 if holes else 0)) / max(3, len(text)) * 1.45)
-    p += Pos(0, 0, t) * extrude(T(text, size), 1.2)
+    letters = Pos(0, 0, t) * extrude(T(text, size), 1.2)
+    raised = letters if raised is None else raised + letters
     if holes:
         for sx in (-1, 1)[:holes] if holes <= 2 else (-1, 1):
             x = sx * (w / 2 - 9)
             p -= Pos(x, 0, 0) * Cylinder(1.9, 3 * t, align=(Align.CENTER, Align.CENTER, Align.CENTER))
             p -= Pos(x, 0, t - 1.8) * Cone(1.9, 3.8, 1.8, align=(Align.CENTER, Align.CENTER, Align.MIN))   # countersink (#6 / M3.5)
-    return save(f"sign_{''.join(c for c in text if c.isalnum())[:16]}", {"sign": p},
+    name = f"sign_{''.join(c for c in text if c.isalnum())[:16]}"
+    if colors == 2:
+        return _two_colour(name, p, raised, "flat, no supports; #6 or M3.5 countersunk screws; text and border print on filament slot 2 (no pause needed)",
+                           {"size_mm": [w, h, t + 1.2], "colors": 2})
+    return save(name, {"sign": p + raised},
                 "flat, no supports; #6 or M3.5 countersunk screws; pause at 3.0 mm for 2-colour text",
                 {"size_mm": [w, h, t + 1.2], "pause_height_mm": t})
 
@@ -161,7 +225,7 @@ def holder(outline=None, dims=None, mount="screws", depth=None, wall=2.4):
         obj = Polygon(*pts, align=None)
         depth = depth or o.get("depth", 15.0)
     else:
-        Wd, Dd, Hd = (float(v) for v in dims.lower().split("x"))
+        Wd, Dd, Hd = parse_dims(dims, 3)
         obj = RectangleRounded(Wd, Dd, min(3, Wd / 4, Dd / 4)); depth = depth or Hd * 0.6
     pocket = offset(obj, g, kind=Kind.ARC)
     outer = offset(obj, g + wall, kind=Kind.ARC)
@@ -195,12 +259,16 @@ def devices():
 
 def stand(device=None, dims=None, angle=65.0, case=2.0, cable=True):
     if device:
-        d = devices().get(device)
+        devs = devices()
+        low = {k.lower(): k for k in devs}
+        d = devs.get(low.get(device.lower(), device))
         if not d:
-            raise SystemExit(f"unknown device {device!r}; known: {', '.join(devices())}. Add one: forge make devices add NAME WxHxT")
+            close = difflib.get_close_matches(device, list(devs), n=3, cutoff=0.4)
+            hint = f" Did you mean: {', '.join(close)}?" if close else ""
+            raise SystemExit(f"unknown device {device!r}.{hint} known: {', '.join(devs)}. Add one: forge make devices add NAME WxHxT")
         w, t = d["w"], d["t"]
     else:
-        w, t = (float(v) for v in dims.lower().split("x"))
+        w, t = parse_dims(dims, 2)
     slot = t + 2 * case + 1.0                                     # case on both faces + 1 mm play
     W = max(60.0, w * 0.75)
     base_d, base_t = 85.0, 5.0
@@ -268,30 +336,48 @@ def main():
     ap.add_argument("--snap", action="store_true"); ap.add_argument("--round", type=float, default=3.0)
     ap.add_argument("--size", type=float, default=12.0); ap.add_argument("--hole", type=float, default=4.5)
     ap.add_argument("--w", type=float, default=140.0); ap.add_argument("--h", type=float, default=40.0)
-    ap.add_argument("--holes", type=int, default=2); ap.add_argument("--border", action="store_true")
+    ap.add_argument("--holes", type=int, default=2); ap.add_argument("--colors", type=int, choices=[1, 2], default=None, help="keychain/sign: 2 = base + text as separate filament slots (default 2 on a multicolour printer profile)"); ap.add_argument("--border", action="store_true")
     ap.add_argument("--outline"); ap.add_argument("--dims"); ap.add_argument("--mount", default="screws")
     ap.add_argument("--depth", type=float); ap.add_argument("--device"); ap.add_argument("--angle", type=float, default=65.0)
     ap.add_argument("--case", type=float, default=2.0); ap.add_argument("--no-cable", action="store_true")
     ap.add_argument("--width", type=float, default=100.0); ap.add_argument("--frame", action="store_true")
     a = ap.parse_args()
-    if a.what == "box":
-        W, D, H = (float(v) for v in a.args[:3]); box(W, D, H, a.lid, a.divs, a.label, a.snap, a.round)
-    elif a.what == "keychain":
-        keychain(a.args[0], a.size, a.hole)
-    elif a.what == "sign":
-        sign(a.args[0], a.w, a.h, a.holes, a.border)
-    elif a.what == "holder":
-        holder(a.outline, a.dims, a.mount, a.depth)
-    elif a.what == "stand":
-        stand(a.device, a.dims, a.angle, a.case, not a.no_cable)
-    elif a.what == "lithophane":
-        lithophane(a.args[0], a.width, frame=a.frame)
-    elif a.what == "devices":
-        if a.args[:1] == ["add"]:
-            name, dims = a.args[1], a.args[2]; w, h, t = (float(v) for v in dims.lower().split("x"))
-            d = devices(); d[name] = {"w": w, "h": h, "t": t, "source": "added by user"}; json.dump(d, open(DEV, "w"), indent=1)
-        print(json.dumps(devices(), indent=1))
+    usage = {"box": "forge make box W D H [--lid slide|press]", "keychain": 'forge make keychain "TEXT"', "sign": 'forge make sign "TEXT"',
+             "holder": "forge make holder --dims 60x30x20", "stand": 'forge make stand --device "iPhone Air"',
+             "lithophane": "forge make lithophane photo.jpg", "devices": "forge make devices"}[a.what]
 
+    def num(v):
+        try:
+            return float(v)
+        except ValueError:
+            ap.exit(2, f'forge make {a.what}: "{v}" is not a number (mm)\n')
+    if a.what == "box" and len(a.args) < 3:
+        ap.exit(2, "forge make box needs W D H (inside size, mm), e.g. forge make box 80 60 40\n")
+    if a.what in ("keychain", "sign") and not a.args:
+        ap.exit(2, f'forge make {a.what} needs the text, e.g. forge make {a.what} "MARK"\n')
+    if a.what == "lithophane" and (not a.args or not os.path.isfile(a.args[0])):
+        ap.exit(2, "forge make lithophane needs a photo, e.g. forge make lithophane me.jpg\n")
+    try:
+        if a.what == "box":
+            W, D, H = (num(v) for v in a.args[:3]); box(W, D, H, a.lid, a.divs, a.label, a.snap, a.round)
+        elif a.what == "keychain":
+            keychain(a.args[0], a.size, a.hole, colors=a.colors or default_colors())
+        elif a.what == "sign":
+            sign(a.args[0], a.w, a.h, a.holes, a.border, colors=a.colors or default_colors())
+        elif a.what == "holder":
+            holder(a.outline, a.dims, a.mount, a.depth)
+        elif a.what == "stand":
+            stand(a.device, a.dims, a.angle, a.case, not a.no_cable)
+        elif a.what == "lithophane":
+            lithophane(a.args[0], a.width, frame=a.frame)
+        elif a.what == "devices":
+            if a.args[:1] == ["add"]:
+                name, dims = a.args[1], a.args[2]; w, h, t = (float(v) for v in dims.lower().split("x"))
+                d = devices(); d[name] = {"w": w, "h": h, "t": t, "source": "added by user"}; json.dump(d, open(DEV, "w"), indent=1)
+            print(json.dumps(devices(), indent=1))
+
+    except (ValueError, KeyError, IndexError) as e:
+        ap.exit(2, f"forge make {a.what}: {e}\nusage: {usage}\n")
 
 if __name__ == "__main__":
     main()
