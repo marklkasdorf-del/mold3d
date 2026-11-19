@@ -342,6 +342,9 @@ def gather(a):
     if fs:
         rep["fit"] = {"stamped": fs[0], "text": fs[1], "numbers": spec_lib.fit_numbers(spec)}
     rep["checks"] = get_checks(out_dir, stl, spec, a.fresh)
+    mt = _jload(os.path.join(out_dir, "mount.json"))          # photo-to-fit mounts (forge mount build/comb)
+    if mt:
+        rep["mount"] = mt
     if mech:
         rep["moving_parts"] = mech
         tag = fit.tag("pip_gap")
@@ -416,6 +419,17 @@ def markdown(rep):
         rows.append(("Checks", ("✅ " if ck["green"] == ck["total"] else "❌ " if ck.get("status") == "FAIL" else "⚠️ ") + txt))
     if fitinfo:
         rows.append(("Fit", ("⚠️ " if fitinfo["stamped"] else "✅ ") + fitinfo["text"]))
+    mt = rep.get("mount")
+    if mt:
+        ld = mt.get("load") or {}
+        if mt.get("range_text"):
+            rows.append(("Grips", mt["range_text"]))
+        if ld.get("sigma_mpa") is not None:
+            rows.append(("Load", f"holds {ld['mass_g'] / 1000:.2f} kg full · {ld['sigma_mpa']:g} of {ld['allow_mpa']:g} MPa, "
+                                 f"{'along' if ld.get('along_layers') else 'across'} the layers [R]"
+                                 + (f", plate thickened to {ld['thickened_to']:g}" if ld.get("thickened_to") else "")))
+        if mt.get("hardware"):
+            rows.append(("Hardware", mt["hardware"]))
     mp = rep.get("moving_parts")
     if mp:
         if mp.get("selftest_ok") is None:

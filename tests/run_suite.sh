@@ -356,4 +356,147 @@ PY
 (cd "$Q" && BLENDER=none MOLD3D_OUT="$Q/out" "$F/bin/forge" run cube.py --name cube > "$Q/run.log" 2>&1); rc=$?
 [ $rc = 0 ] && [ -s "$Q/out/cube/sheet.png" ] && ! grep -q '"status": "FAIL"' "$Q/out/cube/verify.json" && ok "forge run with BLENDER=none: exit 0, sheet.png from Quick View, no FAIL row" || no "run quick view" "rc=$rc, see $Q/run.log"
 
+# 13 photo-to-fit (forge mount): known answers for the parser, the typo check, the clamp/load math, the builds, the comb, the cards, the wiring
+P2="$T/p2f"; rm -rf "$P2" "$F/out/p2f-chair" "$F/out/p2f-desk"; mkdir -p "$P2"
+"$CAD" - <<'PY' && ok "mount parse: A 32 B 18 C 40, a=32 b 18.5, 3.2cm, 1.25in, c100.5 (strip), bare 32, bad replies raise" || no "mount parse" "known answers differ"
+import sys, math; sys.path.insert(0, '.'); import mount
+r = mount.parse_numbers("A 32 B 18 C 40", ["A", "B", "C"]); assert (r["A"]["mm"], r["B"]["mm"], r["C"]["mm"]) == (32, 18, 40), r
+r = mount.parse_numbers("a=32, b 18.5", ["A", "B"]); assert (r["A"]["mm"], r["B"]["mm"]) == (32, 18.5), r
+assert mount.parse_numbers("A 3.2cm", ["A"])["A"]["mm"] == 32.0
+assert abs(mount.parse_numbers("A 1.25in", ["A"])["A"]["mm"] - 31.75) < 0.01
+r = mount.parse_numbers("A c100.5", ["A"])["A"]; assert abs(r["mm"] - 31.99) <= 0.01 and "circumference" in r["note"], r
+assert mount.parse_numbers("32", ["A"])["A"]["mm"] == 32
+for bad, labs in (("hello", ["A"]), ("A 32", ["A", "B"]), ("D 5", ["A"])):
+    try: mount.parse_numbers(bad, labs); sys.exit("did not raise: " + bad)
+    except ValueError: pass
+PY
+"$CAD" - "$P2" <<'PY' && ok "mount typo check: est 32.10 from the card; 32 and 38 pass; 3.2 = cm, 1.26 = inches, 23 = digits swapped, 320 = extra digit; numbers exits 2, then 0 with --confirm" || no "mount typo" "known answers differ"
+import sys, os, json, subprocess; sys.path.insert(0, '.'); import mount
+from PIL import Image
+an = {"photos": [{"file": "photo_1.jpg"}], "measure": [{"label": "A", "what": "tube diameter", "photo": 0, "p0": [0.4, 0.2], "p1": [0.4, 0.2 + 150 / 1500]}],
+      "scale_ref": {"what": "credit card, long edge", "mm": 85.6, "photo": 0, "p0": [0.1, 0.8], "p1": [0.3, 0.8]}}
+sz = {0: (2000, 1500)}      # 0.2 x 2000 = 400 px for 85.6 mm; 150 px for the tube -> 32.1 mm
+def flag(u): return mount.typo_check(an, {"A": {"mm": u}}, sizes=sz)
+for u in (32, 38): assert not flag(u), (u, flag(u))
+for u, w in ((3.2, "cm"), (1.26, "inches"), (23, "digits swapped"), (320, "extra digit")):
+    f = flag(u); assert f and w in f[0] and "about 32" in f[0], (u, f)
+T = sys.argv[1]; OUT = os.environ["MOLD3D_OUT"]; F = os.path.dirname(os.getcwd()); fg = [F + "/bin/forge", "mount"]
+Image.new("RGB", (2000, 1500), (140, 140, 140)).save(T + "/ty.jpg")
+subprocess.run(fg + ["init", "p2f-chair", T + "/ty.jpg"], check=True, capture_output=True)
+p = os.path.join(OUT, "p2f-chair", "analysis.json"); a = json.load(open(p)); a.update(json.loads(json.dumps(an)), payload={"kind": "cup"}, interface={"section": "round"}, style="clamp-round")
+a["photos"] = [{"file": "photo_1.jpg"}]; json.dump(a, open(p, "w"))
+r = subprocess.run(fg + ["numbers", "p2f-chair", "A 23"], capture_output=True, text=True); assert r.returncode == 2 and "digits swapped" in r.stdout, r.stdout
+r = subprocess.run(fg + ["numbers", "p2f-chair", "A 23", "--confirm"], capture_output=True, text=True); assert r.returncode == 0, r.stdout
+PY
+"$CAD" - <<'PY' && ok "clamp-round A=32 r=2.5: D 29.5..34.5, c 8.944, G(32) 12.40, G(34.5) 17.89, G(29.5) 0, M4x35, 'Grips 29.5–34.5 mm tube'" || no "clamp math" "known answers differ"
+import sys; sys.path.insert(0, '.'); import mountgen as M
+p = M.clamp_params(32)
+assert (p["D_lo"], p["D_hi"]) == (29.5, 34.5) and abs(p["c"] - 8.944) <= 0.001, p
+assert abs(M.G(32, p["D_lo"]) - 12.40) <= 0.01 and abs(M.G(34.5, p["D_lo"]) - 17.89) <= 0.01 and M.G(29.5, p["D_lo"]) == 0
+assert p["bolt_mm"] == 35 and p["range_text"] == "Grips 29.5–34.5 mm tube", p
+PY
+"$CAD" - <<'PY' && ok "load: 795 g x3 = 23.40 N; L60 b20 h8 = 6.58 MPa ok along layers, not ok across (4 MPa); screw M 1404 N.mm b 20 = t 10.5; 15 deg pose rule" || no "load math" "known answers differ"
+import sys; sys.path.insert(0, '.'); import mountgen as M
+r = M.load_check(795, 3, 60, 20, 8, True); assert abs(r["F_N"] - 23.40) <= 0.01 and abs(r["sigma_mpa"] - 6.58) <= 0.02 and r["ok"], r
+r = M.load_check(795, 3, 60, 20, 8, False); assert not r["ok"] and r["allow_mpa"] == 4.0, r
+assert M.screw_thickness(1404, 20) == 10.5 and M.screw_thickness(10, 20) == 4.0
+assert M.along_layers_pose([1, 0, 0]) and M.along_layers_pose([1, 0, 0.26]) and not M.along_layers_pose([0, 0, 1]) and not M.along_layers_pose([1, 0, 0.4])
+PY
+"$CAD" - "$P2" <<'PY' > "$P2/build.log" 2>&1 && ok "mount build: clamp-round + IceFlow cup = 3 pieces, ring ID 86.6, checks green, load ok, M4x35; hookover + hook A=25 = 1 piece, gap open, along-layers pose; missing A = exit 2" || no "mount build" "see $P2/build.log"
+import sys, os, json, subprocess; sys.path.insert(0, '.')
+from PIL import Image
+T = sys.argv[1]; OUT = os.environ["MOLD3D_OUT"]; F = os.path.dirname(os.getcwd()); fg = [F + "/bin/forge", "mount"]
+Image.new("RGB", (1200, 900), (150, 150, 155)).save(T + "/fx.jpg")
+pay = {"kind": "cup", "object_id": "stanley-iceflow-flipstraw-2-16oz", "mass_full_g": 795, "source": "datasheet", "ref": "https://stanley1913.com",
+       "body_d": 84.8, "base_d": None, "height": 209.8, "handle_w": None}
+base = {"interface": {"section": "round", "photo": 0, "spot": [[0.3, 0.3], [0.5, 0.3], [0.5, 0.5], [0.3, 0.5]], "prior_mm": {"A": 32}},
+        "load": {"photo": 0, "from": [0.6, 0.4], "to": [0.6, 0.6], "factor": 3}, "obstacles": [{"what": "lever", "photo": 0, "at": [0.7, 0.6], "r": 0.05, "keep_out_mm": 10}],
+        "styles": [{"id": "clamp-round", "why": "round tube"}], "style": "clamp-round",
+        "measure": [{"label": "A", "what": "tube diameter", "photo": 0, "p0": [0.4, 0.3], "p1": [0.4, 0.5], "tool": "calipers", "precision_mm": 0.5}],
+        "scale_ref": None, "missing_views": [], "numbers": {"A": {"mm": 32, "source": "user"}}}
+def make(name, **kw):
+    subprocess.run(fg + ["init", name, T + "/fx.jpg"], check=True, capture_output=True)
+    p = os.path.join(OUT, name, "analysis.json"); a = json.load(open(p)); a.update(json.loads(json.dumps(base))); a.update(kw); json.dump(a, open(p, "w")); return os.path.join(OUT, name)
+d = make("p2f-chair", payload=pay)
+r = subprocess.run(fg + ["build", "p2f-chair"], capture_output=True, text=True)
+assert r.returncode == 0, r.stdout
+v = json.load(open(d + "/verify.json")); spec = json.load(open(d + "/spec.json")); mt = json.load(open(d + "/mount.json"))
+assert v["status"] != "FAIL" and v["info"]["components"] == 3 and spec["components"] == 3, v["summary"]
+names = {c["name"]: c["status"] for c in v["checks"]}
+cupk = [k for k in names if k.startswith(("cup", "drain"))]
+assert len(cupk) == 4 and all(names[k] == "PASS" for k in cupk), names
+em = spec["checks"]["cup is hollow just inside the ring"]["empty_at"]; so = spec["checks"]["cup wall is solid at mid-wall"]["solid_at"]
+assert abs((so[0] - em[0]) - 1.3) < 0.01 and abs(em[2] - so[2]) < 1e-6, (em, so)      # ring ID 86.6: r 43.2 open, r 44.5 solid, same height
+assert mt["load"]["ok"] and mt["load"]["along_layers"] and "M4×35" in mt["hardware"] and mt["range_text"] == "Grips 29.5–34.5 mm tube", mt
+assert all(abs(p["plate_offset"][2]) < 1e-6 for p in mt["pieces"]) and os.path.exists(d + "/assembled.stl") and os.path.exists(d + "/dummy_dlo.stl")
+assert all(f["source"] not in ("", "ASSUMED") for f in spec["fit"].values()), spec["fit"]
+assert all(spec["fit"][k]["source"] == "datasheet" for k in spec["fit"] if k.startswith("payload")), spec["fit"]      # a Stanley number never comes from the user
+dd = make("p2f-desk", payload={"kind": "hook", "mass_full_g": 250, "source": "datasheet", "ref": "https://sony.example"}, style="hookover",
+          styles=[{"id": "hookover", "why": "flat edge"}], numbers={"A": {"mm": 25, "source": "user"}}, obstacles=[],
+          interface=dict(base["interface"], section="edge"))
+r = subprocess.run(fg + ["build", "p2f-desk"], capture_output=True, text=True); assert r.returncode == 0, r.stdout
+v = json.load(open(dd + "/verify.json")); mt = json.load(open(dd + "/mount.json"))
+assert v["status"] != "FAIL" and v["info"]["components"] == 1, v["summary"]
+assert any(c["status"] == "PASS" and "gap is open" in c["name"] for c in v["checks"]), v["checks"]
+import mountgen as M
+assert M.along_layers_pose(mt["stress_axis"]) and mt["load"]["along_layers"] and mt["range_text"] == "Grips desks 23–26 mm thick", mt
+a = json.load(open(dd + "/analysis.json")); a["numbers"] = {}; a["interface"].pop("prior_mm"); json.dump(a, open(dd + "/analysis.json", "w"))
+r = subprocess.run(fg + ["build", "p2f-desk"], capture_output=True, text=True); assert r.returncode == 2 and "A" in r.stdout, r.stdout
+PY
+"$CAD" - <<'PY' && ok "mount comb A=32: 1 piece, height 8, volume < 6000, probes green; result: -1 = 31 measured, 0 = 32, all loose ~2 = 29 (user, comb rebuilt), all tight = 34, junk = exit 2" || no "mount comb/result" "known answers differ"
+import sys, os, json, subprocess; sys.path.insert(0, '.')
+OUT = os.environ["MOLD3D_OUT"]; F = os.path.dirname(os.getcwd()); fg = [F + "/bin/forge", "mount"]
+d = os.path.join(OUT, "p2f-chair")
+def setA(mm, src="user"):
+    a = json.load(open(d + "/analysis.json")); a["numbers"] = {"A": {"mm": mm, "source": src}}; json.dump(a, open(d + "/analysis.json", "w"))
+setA(32)
+r = subprocess.run(fg + ["comb", "p2f-chair"], capture_output=True, text=True); assert r.returncode == 0, r.stdout
+v = json.load(open(d + "/comb/verify.json")); spec = json.load(open(d + "/comb/spec.json"))
+assert v["status"] == "PASS" and v["info"]["components"] == 1 and abs(v["info"]["bbox_mm"][2] - 8) <= 0.5 and v["info"]["volume_mm3"] < 6000, v["info"]
+m1 = spec["checks"]["tooth -1: bore is open"]["empty_at"]; w1 = spec["checks"]["tooth -1: wall is solid"]["solid_at"]
+assert abs((w1[0] - m1[0]) - 1.1) < 0.01, (m1, w1)         # r 15.4 open, r 16.5 solid, same tooth centre
+assert json.load(open(d + "/comb/mount.json"))["range_mm"] == [31.0, 33.0]
+def res(text):
+    setA(32)
+    subprocess.run(fg + ["comb", "p2f-chair"], capture_output=True)
+    r = subprocess.run(fg + ["result", "p2f-chair", text], capture_output=True, text=True); assert r.returncode == 0, r.stdout
+    return json.load(open(d + "/analysis.json"))
+n = res("-1 clicked")["numbers"]["A"]; assert n["mm"] == 31 and n["source"] == "measured", n
+n = res("0 fits")["numbers"]["A"]; assert n["mm"] == 32 and n["source"] == "measured", n
+a = res("all loose ~2"); assert a["numbers"]["A"]["mm"] == 29 and a["numbers"]["A"]["source"] == "user" and a["comb"]["center"] == 29, a["numbers"]
+assert json.load(open(d + "/comb/mount.json"))["range_mm"] == [28.0, 30.0]
+assert res("all tight")["numbers"]["A"]["mm"] == 34
+r = subprocess.run(fg + ["result", "p2f-chair", "banana"], capture_output=True, text=True); assert r.returncode == 2
+PY
+"$CAD" - <<'PY' && ok "mount report: Grips / Load / Hardware rows, and Fit is fit-checked once A is measured" || no "mount report" "rows missing"
+import sys, os, json, subprocess; sys.path.insert(0, '.')
+OUT = os.environ["MOLD3D_OUT"]; F = os.path.dirname(os.getcwd()); fg = [F + "/bin/forge", "mount"]
+d = os.path.join(OUT, "p2f-chair"); a = json.load(open(d + "/analysis.json")); a["numbers"] = {"A": {"mm": 32, "source": "measured"}}; json.dump(a, open(d + "/analysis.json", "w"))
+assert subprocess.run(fg + ["build", "p2f-chair"], capture_output=True).returncode == 0
+r = subprocess.run([F + "/bin/forge", "report", d, "--no-export", "--no-preview"], capture_output=True, text=True).stdout
+for row in ("| Grips | Grips 29.5–34.5 mm tube", "| Load | holds 0.80 kg full", "| Hardware | 2× M4×35", "| Fit | ✅ fit-checked"):
+    assert row in r, (row, r)
+PY
+"$CAD" - <<'PY' && ok "mount cards: mount_card.png + measure_card.png exist at 1080 wide; card exits 2 without a style; a bad name is one plain line" || no "mount cards" "see output"
+import sys, os, json, subprocess; sys.path.insert(0, '.')
+from PIL import Image
+OUT = os.environ["MOLD3D_OUT"]; F = os.path.dirname(os.getcwd()); fg = [F + "/bin/forge", "mount"]
+d = os.path.join(OUT, "p2f-chair")
+for sub, f in (("card", "mount_card.png"), ("measure-card", "measure_card.png")):
+    r = subprocess.run(fg + [sub, "p2f-chair"], capture_output=True, text=True); assert r.returncode == 0, r.stdout
+    assert Image.open(os.path.join(d, f)).size[0] == 1080
+a = json.load(open(d + "/analysis.json")); a.pop("style"); json.dump(a, open(d + "/analysis.json", "w"))
+r = subprocess.run(fg + ["card", "p2f-chair"], capture_output=True, text=True); assert r.returncode == 2 and "style" in r.stdout, r.stdout
+r = subprocess.run(fg + ["card", "no-such-design"], capture_output=True, text=True); assert r.returncode == 2 and "Traceback" not in r.stdout + r.stderr
+PY
+"$CAD" - <<'PY' && ok "mount wiring: SKILL.md PHOTO-TO-FIT route row near the top, version 2.5.0 in SKILL.md + plugin.json, reference/photo-to-fit.md, SendUserFile allowed, forge --help lists mount" || no "mount wiring" "see output"
+import json, os, subprocess
+F = os.path.dirname(os.getcwd()); sk = open(F + "/SKILL.md").read()
+route = [l for l in sk.split("## Route")[1].split("\n") if l.startswith("| ") and not l.startswith("| The ask")]
+assert "forge mount" in route[0] + route[1] and "PHOTO-TO-FIT" in route[0] + route[1], route[:2]
+assert "version: 2.5.0" in sk and json.load(open(F + "/.claude-plugin/plugin.json"))["version"] == "2.5.0" and os.path.exists(F + "/reference/photo-to-fit.md")
+assert "SendUserFile" in sk.split("allowed-tools:")[1].split("\n")[0]
+assert any(l.strip().startswith("mount ") for l in subprocess.run([F + "/bin/forge", "--help"], capture_output=True, text=True).stdout.split("\n"))
+PY
+
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

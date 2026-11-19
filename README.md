@@ -126,6 +126,7 @@ LLMs write plausible CAD scripts, but they cannot see an STL, they misremember d
 | **Text -> 3D (local)** | `forge text3d "<idea>"` | LCM-Dreamshaper concept -> Hunyuan3D-2mini shape -> watertight, scaled, flat-based figure + preflight. Optional `--flexi`, `--helmet` (wearable, sized to a head) |
 | **Remix** | `forge remix <stl> text / keychain / magnets / thicken / fit-head / flat / mirror / scale` | Upgrade any download: text that follows curves, keychain loop, magnet pockets with real walls, medial-surface wall thickening, scale-to-head |
 | **Make** | `forge make box / keychain / sign / holder / stand / lithophane` | Practical generators from your numbers; box lids are motion-checked |
+| **Photo-to-fit** | `forge mount init / card / measure-card / numbers / comb / result / build` | A photo of the spot + what it should hold -> a Mount Card and a Measuring Card, 1-3 numbers with a typo check against the photo, an optional fit comb, then a mount that grips a range (bolt clamp, hook-over clip, strap saddle, screw plate) with a load check; branded payloads are looked up in `knowledge/objects.json`, never measured |
 | **Plate** | `forge plate` | Pack many parts on the bed, per-item cost |
 | **Split** | `forge split` | Bed-sized pieces with the smallest seams, alignment pins, engraved seam IDs |
 | **Gridfinity + Photofit** | `forge gridfinity`, `forge photofit` | Gridfinity bins/baseplates to spec; a photo of an object on a printed ArUco mat -> exact outline -> custom pocket bin |
@@ -256,6 +257,7 @@ bin/forge text3d "friendly axolotl" --height 60                       # first ru
 | `looks` | `forge looks <render_dir\|png...> --target "<thing>" [--refs ...]` |
 | `remix` | `forge remix in.stl text "HELLO" [--side ..] [--engrave]`, `keychain`, `magnets [--magnet 10x2 --count 2]`, `thicken [--min 2]`, `fit-head [--circ mm]`, `flat`, `mirror`, `scale` |
 | `make` | `forge make box W D H [--lid slide\|press] [--divs 2x1] [--label ..]`, `keychain "TXT"`, `sign "TXT"`, `holder`, `stand [--device ..]`, `lithophane photo.jpg`, `devices` |
+| `mount` | `forge mount init <name> <photo...> [--ask ..]`, `card`, `measure-card`, `numbers <name> "A 32" [--confirm]`, `comb`, `result <name> "-1 clicked"`, `build`, `product "<query>"` (exit 2 = needs the user or the agent) |
 | `plate` | `forge plate a.stl [b.stl ..] [--copies N] [--fill] [--gap 4] [--slice]` |
 | `split` | `forge split model.stl [--bed X,Y,Z] [--scale 1.06] [--pins printed\|filament\|none]` |
 | `gridfinity` | `forge gridfinity bin 2 1 3 [--magnets] [--divs 2] [--label]`, `base 4 3` |

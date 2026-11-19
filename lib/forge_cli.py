@@ -291,7 +291,7 @@ def cmd_heat(rest):
 # Every sub-script runs with cwd=lib/, so a path the user typed relative to THEIR folder must be made absolute first.
 FILE_EXT = (".stl", ".3mf", ".step", ".stp", ".obj", ".ply", ".glb", ".usdz", ".json", ".jpg", ".jpeg", ".png", ".heic", ".pdf", ".py", ".scad", ".gcode")
 PATH_FLAGS = ("--out", "--output", "-o", "--parts", "--spec", "--ref", "--dst", "--json")   # values are paths even if they don't exist yet
-INPUT_CMDS = ("contents", "verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "view", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl")
+INPUT_CMDS = ("contents", "verify", "preflight", "flexify", "ar", "split", "heat", "export", "report", "view", "remix", "showcase", "looks", "movecheck", "topo", "photofit", "plate", "step2stl", "mount")
 
 
 def absargs(cmd, rest):
@@ -331,6 +331,7 @@ def absargs(cmd, rest):
 COMMANDS = [
     ("Make something", [
         ("make", "box | keychain | sign | stand | holder | lithophane from your numbers (clearances from fit.json)"),
+        ("mount", "init|card|measure-card|numbers|comb|result|build: photo of the spot -> a part that fits it"),
         ("remix", "<stl> text | keychain | magnets | thicken | fit-head | flat | mirror | scale: upgrade a download"),
         ("plate", "<stl...> --fill | --copies N: pack the bed, per-item cost"),
         ("mech", "list | build <name> | test | ratio: verified print-in-place mechanisms (fitcard, gyro, planetary, balisong...)"),
@@ -407,6 +408,7 @@ NEW = {
     "looks": lambda r: sys.exit(subprocess.run([HG_PY, os.path.join(HERE, "looks.py")] + r, cwd=HERE).returncode),
     "remix": lambda r: _cad("remix.py", r),
     "make": lambda r: _cad("make.py", r),
+    "mount": lambda r: _cad("mount.py", r),
     "plate": lambda r: _cad("plate.py", r),
     "topo": cmd_topo, "parts-find": cmd_parts_find, "step2stl": cmd_step2stl, "movecheck": cmd_movecheck, "grade": cmd_grade,
 }
