@@ -242,7 +242,8 @@ v2=$(FORGE_PRINTER="$P/br5.json" "$CAD" preflight.py "$T/bridge10.stl" 2>/dev/nu
 import sys; sys.path.insert(0, '.'); import meshkit as mk
 mk.save(mk.box(0, 0, 0, 250, 20, 10), sys.argv[1] + '/bar250.stl')
 PY
-v1=$("$CAD" preflight.py "$T/bar250.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
+echo '{"name": "generic 220 test", "bed": [220, 220, 250], "sources": {"bed": "test fixture"}}' > "$P/generic220.json"
+v1=$(FORGE_PRINTER="$P/generic220.json" "$CAD" preflight.py "$T/bar250.stl" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
 v2=$(FORGE_PRINTER="$F/knowledge/printers/anycubic-kobra-x.json" "$CAD" preflight.py "$T/bar250.stl" --json "$P/kobra.json" 2>/dev/null | head -1 | sed 's/^\[\([^]]*\)\].*/\1/')
 [ "$v1" = "NO-GO" ] && [ "$v2" = "GO" ] && "$CAD" -c "import json,sys;r=json.load(open('$P/kobra.json'));sys.exit(0 if r['limits']['bed']==[260,260,260] and r['printer']=='Anycubic Kobra X' else 1)" \
   && ok "a 250 mm bar: NO-GO on the generic 220 bed, GO on the Anycubic Kobra X (260 cube); preflight.json records the limits + printer" || no "kobra x bed" "generic=$v1 kobra=$v2"
@@ -289,5 +290,9 @@ p = subprocess.run([sys.executable, "export3mf.py", "--piece", f"plate={body}@1,
                     "--expect", json.dumps({"pieces": 1, "filaments": 2, "visible_from_top": ["text"]})], capture_output=True, text=True)
 assert p.returncode == 0 and "MATCHES THE ASK" in p.stdout, p.stdout + p.stderr
 PY2
+
+# 12 Moldy persona is wired (cheap file checks)
+grep -A2 "^| The ask" SKILL.md | tail -1 | grep -q "no idea what to print" && grep -q "reference/moldy.md" SKILL.md && grep -q "^## Hard limits" reference/moldy.md && grep -q "Rules that never bend" reference/moldy.md && grep -q "^knowledge/moldy-taste.md" .gitignore && [ -f knowledge/moldy-taste.example.md ] \
+  && ok "moldy: idea-chat route is the first row of the route table, SKILL.md points at reference/moldy.md (Hard limits section), taste file git-ignored + committed example" || no "moldy wiring" "route row / reference / .gitignore / template missing"
 
 echo; echo "Mold3D suite: $pass passed, $fail failed"; [ $fail -eq 0 ]

@@ -25,6 +25,10 @@ Install Mold3D for me: run `curl -fsSL https://raw.githubusercontent.com/marklka
 
 Then in Claude Code: `/mold3d <what you want>`
 
+### Meet Moldy
+Mold3D talks to you as **Moldy**, a gremlin who lives in your printer. Plastic-obsessed, roasts bad ideas (never you), cries a little at a clean first layer. Same rigorous engine underneath: every number still comes from a tool, and Moldy never pretends something will print.
+Don't know what to print? Say "I'm bored" or just `/mold3d` and Moldy will talk you into something. It remembers what you liked (in `knowledge/moldy-taste.md`, on your machine only). Want the plain assistant? Say "plain mode".
+
 ### How it works
 Mold3D is a [Claude Code](https://claude.com/claude-code) skill (and a plain Python CLI, `forge`) that turns an idea into a printable STL through code-CAD (build123d / OpenSCAD / Blender bpy), then **proves** the result before any plastic is spent: dimensions against a numeric spec, wall thickness, motion sweeps for anything that moves, fit/clearance checks, renders you can read, and a layer-by-layer **preflight** that predicts print failures (knife-edge bed contact, mid-air islands, fused gaps, auto-support traps, tip-over).
 
