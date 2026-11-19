@@ -1,0 +1,17 @@
+{
+ "_about": "Branded things Mold3D looks up instead of measuring. mm and g; null = unknown. `source` is where the numbers came from, `read` the date they were read. Add an entry (with its source URL) the first time a new product is asked for.",
+ "objects": [
+  {"id": "stanley-iceflow-flipstraw-2-16oz", "name": "Stanley IceFlow Flip Straw 2.0 Bottle 16 oz", "aliases": ["stanley iceflow", "iceflow flip straw", "iceflow bottle", "stanley 16 oz iceflow", "flip straw bottle"],
+   "kind": "cup", "capacity_ml": 473, "empty_g": 322, "body_d": 84.8, "base_d": null, "height": 209.8, "handle_w": null,
+   "source": "https://www.dickssportinggoods.com/p/stanley-16-oziceflow-flip-straw-2-0-bottle-24stau16zcflwbttlhyd (retailer listing of Stanley's spec: 3.54 x 3.34 x 8.26 in, 0.71 lb; body_d = the 3.34 in width, the 3.54 in length includes the lid handle)", "read": "2026-11-19"},
+  {"id": "stanley-everyday-tumbler-16oz", "name": "Stanley Everyday Tumbler 16 oz", "aliases": ["stanley everyday", "everyday tumbler", "stanley 16 oz tumbler", "textured everyday tumbler"],
+   "kind": "cup", "capacity_ml": 473, "empty_g": 200, "body_d": 98.0, "base_d": null, "height": 163.1, "handle_w": null,
+   "source": "https://www.stanley1913.com/products/the-textured-everyday-tumbler-16-oz (search snippet: 3.86 x 3.70 x 6.42 in, 0.44 lb)", "read": "2026-11-19"},
+  {"id": "stanley-trigger-mug-16oz", "name": "Stanley Classic Trigger-Action Travel Mug 16 oz", "aliases": ["stanley trigger", "trigger action mug", "stanley classic mug", "stanley travel mug", "stanley 16 oz mug"],
+   "kind": "cup", "capacity_ml": 473, "empty_g": null, "body_d": 73.7, "base_d": null, "height": 226.1, "handle_w": null,
+   "source": "https://prfo.com/products/stanley-classic-trigger-action-16-oz-travel-mug (retailer listing: 2.9 x 2.9 x 8.9 in; its weight is unreliable)", "read": "2026-11-19"},
+  {"id": "stanley-quencher-h2-20oz", "name": "Stanley Quencher H2.0 FlowState Tumbler 20 oz", "aliases": ["stanley quencher", "quencher h2.0", "quencher 20 oz", "stanley 20 oz quencher", "stanley tumbler 20"],
+   "kind": "cup", "capacity_ml": 591, "empty_g": null, "body_d": null, "base_d": 80.0, "height": 227.6, "handle_w": null, "handle": true,
+   "source": "https://www.stanley1913.com/products/quencher-h2-0-flowstate-tumbler-togethxr-20-oz (3.45 x 3.54 x 8.96 in; handle width not listed)", "read": "2026-11-19"}
+ ]
+}
