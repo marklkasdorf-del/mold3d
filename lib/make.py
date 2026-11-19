@@ -11,7 +11,7 @@
 Boxes are checked like mechanisms: a slide lid must slide all the way out clear AND jam if you try to lift it.
 Output: ./mold3d/make/<thing>/ with STLs already in their PRINT pose + a one-line recipe.
 """
-import argparse, json, math, os, sys
+import argparse, difflib, json, math, os, re, sys
 from build123d import *
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,11 +25,30 @@ WALL = 2.0                     # minimum wall (mm)
 FONT = "Arial Black"
 
 
+_FONT_WARNED = []
+
+
 def T(txt, size, align=(Align.CENTER, Align.CENTER)):
     try:
         return Text(txt, font_size=size, font=FONT, align=align)
     except Exception:
+        if not _FONT_WARNED:
+            _FONT_WARNED.append(1)
+            print(f'make: font "{FONT}" not found, using the default font', file=sys.stderr)
         return Text(txt, font_size=size, align=align)
+
+
+def parse_dims(s, n):
+    """'70x8' / '60X30*20' / '60×30x20' -> n floats, or a plain ValueError with an example."""
+    ex = "--dims 70x8 (W x T)" if n == 2 else "--dims 60x30x20 (W x D x H)"
+    parts = [q for q in re.split(r"[xX*\u00d7]", str(s).replace(" ", "")) if q != ""]
+    try:
+        v = [float(q) for q in parts]
+    except ValueError:
+        v = []
+    if len(v) != n:
+        raise ValueError(f"--dims {s!r} needs {n} numbers in mm, e.g. {ex}")
+    return v
 
 
 def ov(a, b):
@@ -161,7 +180,7 @@ def holder(outline=None, dims=None, mount="screws", depth=None, wall=2.4):
         obj = Polygon(*pts, align=None)
         depth = depth or o.get("depth", 15.0)
     else:
-        Wd, Dd, Hd = (float(v) for v in dims.lower().split("x"))
+        Wd, Dd, Hd = parse_dims(dims, 3)
         obj = RectangleRounded(Wd, Dd, min(3, Wd / 4, Dd / 4)); depth = depth or Hd * 0.6
     pocket = offset(obj, g, kind=Kind.ARC)
     outer = offset(obj, g + wall, kind=Kind.ARC)
@@ -195,12 +214,16 @@ def devices():
 
 def stand(device=None, dims=None, angle=65.0, case=2.0, cable=True):
     if device:
-        d = devices().get(device)
+        devs = devices()
+        low = {k.lower(): k for k in devs}
+        d = devs.get(low.get(device.lower(), device))
         if not d:
-            raise SystemExit(f"unknown device {device!r}; known: {', '.join(devices())}. Add one: forge make devices add NAME WxHxT")
+            close = difflib.get_close_matches(device, list(devs), n=3, cutoff=0.4)
+            hint = f" Did you mean: {', '.join(close)}?" if close else ""
+            raise SystemExit(f"unknown device {device!r}.{hint} known: {', '.join(devs)}. Add one: forge make devices add NAME WxHxT")
         w, t = d["w"], d["t"]
     else:
-        w, t = (float(v) for v in dims.lower().split("x"))
+        w, t = parse_dims(dims, 2)
     slot = t + 2 * case + 1.0                                     # case on both faces + 1 mm play
     W = max(60.0, w * 0.75)
     base_d, base_t = 85.0, 5.0
@@ -274,24 +297,42 @@ def main():
     ap.add_argument("--case", type=float, default=2.0); ap.add_argument("--no-cable", action="store_true")
     ap.add_argument("--width", type=float, default=100.0); ap.add_argument("--frame", action="store_true")
     a = ap.parse_args()
-    if a.what == "box":
-        W, D, H = (float(v) for v in a.args[:3]); box(W, D, H, a.lid, a.divs, a.label, a.snap, a.round)
-    elif a.what == "keychain":
-        keychain(a.args[0], a.size, a.hole)
-    elif a.what == "sign":
-        sign(a.args[0], a.w, a.h, a.holes, a.border)
-    elif a.what == "holder":
-        holder(a.outline, a.dims, a.mount, a.depth)
-    elif a.what == "stand":
-        stand(a.device, a.dims, a.angle, a.case, not a.no_cable)
-    elif a.what == "lithophane":
-        lithophane(a.args[0], a.width, frame=a.frame)
-    elif a.what == "devices":
-        if a.args[:1] == ["add"]:
-            name, dims = a.args[1], a.args[2]; w, h, t = (float(v) for v in dims.lower().split("x"))
-            d = devices(); d[name] = {"w": w, "h": h, "t": t, "source": "added by user"}; json.dump(d, open(DEV, "w"), indent=1)
-        print(json.dumps(devices(), indent=1))
+    usage = {"box": "forge make box W D H [--lid slide|press]", "keychain": 'forge make keychain "TEXT"', "sign": 'forge make sign "TEXT"',
+             "holder": "forge make holder --dims 60x30x20", "stand": 'forge make stand --device "iPhone Air"',
+             "lithophane": "forge make lithophane photo.jpg", "devices": "forge make devices"}[a.what]
 
+    def num(v):
+        try:
+            return float(v)
+        except ValueError:
+            ap.exit(2, f'forge make {a.what}: "{v}" is not a number (mm)\n')
+    if a.what == "box" and len(a.args) < 3:
+        ap.exit(2, "forge make box needs W D H (inside size, mm), e.g. forge make box 80 60 40\n")
+    if a.what in ("keychain", "sign") and not a.args:
+        ap.exit(2, f'forge make {a.what} needs the text, e.g. forge make {a.what} "MARK"\n')
+    if a.what == "lithophane" and (not a.args or not os.path.isfile(a.args[0])):
+        ap.exit(2, "forge make lithophane needs a photo, e.g. forge make lithophane me.jpg\n")
+    try:
+        if a.what == "box":
+            W, D, H = (num(v) for v in a.args[:3]); box(W, D, H, a.lid, a.divs, a.label, a.snap, a.round)
+        elif a.what == "keychain":
+            keychain(a.args[0], a.size, a.hole)
+        elif a.what == "sign":
+            sign(a.args[0], a.w, a.h, a.holes, a.border)
+        elif a.what == "holder":
+            holder(a.outline, a.dims, a.mount, a.depth)
+        elif a.what == "stand":
+            stand(a.device, a.dims, a.angle, a.case, not a.no_cable)
+        elif a.what == "lithophane":
+            lithophane(a.args[0], a.width, frame=a.frame)
+        elif a.what == "devices":
+            if a.args[:1] == ["add"]:
+                name, dims = a.args[1], a.args[2]; w, h, t = (float(v) for v in dims.lower().split("x"))
+                d = devices(); d[name] = {"w": w, "h": h, "t": t, "source": "added by user"}; json.dump(d, open(DEV, "w"), indent=1)
+            print(json.dumps(devices(), indent=1))
+
+    except (ValueError, KeyError, IndexError) as e:
+        ap.exit(2, f"forge make {a.what}: {e}\nusage: {usage}\n")
 
 if __name__ == "__main__":
     main()

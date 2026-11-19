@@ -132,6 +132,9 @@ done
 k=$("$CAD" plate.py "$F/out/make/keychain_TEST/keychain.stl" --fill --name kc_test 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)['items'])")
 [ "${k:-0}" -ge 20 ] && ok "plate --fill packs $k keychains on one bed" || no "plate" "$k items"
 
+# 6c make errors are one plain line + exit 2, never a traceback
+e=$("$CAD" make.py box 30 20 2>&1); rc=$?; [ $rc = 2 ] && echo "$e" | grep -q "needs W D H" && ! echo "$e" | grep -q Traceback && ok "make box with 2 numbers -> plain 'needs W D H', exit 2" || no "make box errors" "rc=$rc: $e"
+
 # 7 forge report: plain STL -> report.json with verdict + supports + files; bridge30 needs supports (3MF ON); fitcard-style mech.json folder adds moving parts
 mkdir -p "$T/rep"; cp "$T/bridge30.stl" "$T/rep/bridge30.stl"
 "$CAD" report.py "$T/rep/bridge30.stl" --no-preview --json > "$T/rep.log" 2>&1
