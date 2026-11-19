@@ -1,10 +1,10 @@
 ---
 name: mold3d
-version: 2.2.0
+version: 2.5.0
 user-invocable: true
 description: Idea-to-printable-3D-model studio for FDM printers. Use when asked to "model / design / make me a <thing> to print", "3D model this", "CAD this", "custom mount/case/holder/adapter/lid/bracket", "fidget", "print-in-place", "something that moves", "flexi <animal>", "figure / statue / mascot of <x>", "text to 3D", "gridfinity", "insert for my <thing>", "split this for my bed", "will this print", "calibrate my printer", "see it in AR", "put my name on", "add a keychain loop", "add magnets", "fix thin walls", "scale to my head", "make me a box", "keychains", "sign", "phone stand", "lithophane", "mold 3d", "/mold3d", or "forge". Code-CAD (build123d/OpenSCAD/bpy) + MechKit verified mechanisms + local text-to-3D + flexify + preflight failure prediction; hands a verified STL to your slicer.
-triggers: [mold 3d, /mold3d, forge, model this for 3d printing, design a part to print, make me a custom, 3d model this, cad this, idea to print, print in place, fidget, flexi, text to 3d, gridfinity, will this print, check an stl]
-allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch]
+triggers: [photo mount, mount it here, holder for my chair, mold 3d, /mold3d, forge, model this for 3d printing, design a part to print, make me a custom, 3d model this, cad this, idea to print, print in place, fidget, flexi, text to 3d, gridfinity, will this print, check an stl]
+allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch, SendUserFile]
 ---
 
 # Mold3D: idea -> verified, printable part
@@ -31,6 +31,7 @@ No `$FORGE/.venv-cad`? Run `MOLD3D_DIR="$FORGE" bash $FORGE/install.sh` first (s
 ## Route (first match wins; tell the user the route in one line)
 | The ask | Route | Tools |
 |---|---|---|
+| a PHOTO of the spot + what it should hold or do ("holder on my chair for my Stanley", photo sent) | PHOTO-TO-FIT: look up the product, analyze, Mount + Measuring Cards, test-or-full, build | forge mount ..., reference/photo-to-fit.md |
 | change a DOWNLOAD (text, keychain loop, magnets, thicker walls, scale to a head, flat bottom, mirror) | REMIX | `forge remix <stl> text|keychain|magnets|thicken|fit-head|flat|mirror|scale` |
 | practical thing from the user's numbers (box, keychain, sign, stand, holder, lithophane) | MAKE | `forge make box|keychain|sign|stand|holder|lithophane` |
 | many copies in one print | PLATE | `forge plate <stl...> --fill` |
@@ -89,6 +90,7 @@ Last step of every finished design: `$FORGE/bin/forge report mold3d/<name>` (or 
 | Checks | ✅ N of N green / ❌ 6 of 8 green: <the red lines in plain words> |
 | Fit | ✅ fit-checked: N fit numbers sourced / ⚠️ NOT FIT-CHECKED: <what> assumed, cheapest fix (only when `fit` is set) |
 | Moving parts | <n>, all clear through full motion |
+| Grips / Load / Hardware | <range> / holds <kg> · <MPa> of <allowed> along the layers [R] / <bolts> (only for mounts) |
 | Gaps | <mm> (calibrated on your printer / default — print the Fit Card) |
 | Assumed | <numbers nobody confirmed> (only when `assumed` is set) |
 | Print | ~<time> · <grams> g |

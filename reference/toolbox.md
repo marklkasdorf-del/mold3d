@@ -12,6 +12,7 @@ Lead with these tools on the USER's files and numbers; MechKit showpieces are th
 | `remix <stl> keychain / magnets / flat / mirror / scale` | ring tab with through-hole (genus +1); magnet pockets with >= 2 mm walls; flat bed face | a boomerang, a 40 mm block |
 | `make box W D H --lid slide|press [--divs] [--label]` | boxes; slide lid motion-checked (slides out clear + lift jams) | both pass |
 | `make keychain|sign|stand|holder|lithophane` | name keychains (2-colour pause height), signs, device stands (knowledge/devices.json), photo-outline holders, lithophanes | rendered + checked |
+| `mount init/card/measure-card/numbers/comb/result/build` | photo -> Mount + Measuring Cards -> a ranged-fit mount (clamp, hook-over, strap, screw) for a cup or hook | the suite #13 |
 | `plate <stl> --fill --slice` | bed packing + per-item cost | 33 keychains, 4 h 50, 2.6 g each |
 | `mech list/build/test` | MechKit: fitcard, gyro, planetary, balisong, helix; Mech API for new ones | all pass; gaps = design gap +-0.01 |
 | `fit show/set` | the one clearance table (`knowledge/fit.json`) | read by every generator |
