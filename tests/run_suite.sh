@@ -327,7 +327,7 @@ assert p.returncode == 0 and "MATCHES THE ASK" in p.stdout, p.stdout + p.stderr
 PY2
 
 # 12 Moldy persona is wired (cheap file checks)
-grep -A2 "^| The ask" SKILL.md | tail -1 | grep -q "no idea what to print" && grep -q "reference/moldy.md" SKILL.md && grep -q "^## Hard limits" reference/moldy.md && grep -q "Rules that never bend" reference/moldy.md && grep -q "^knowledge/moldy-taste.md" .gitignore && [ -f knowledge/moldy-taste.example.md ] \
+(cd "$F" && grep -A2 "^| The ask" SKILL.md | tail -1 | grep -q "no idea what to print" && grep -q "reference/moldy.md" SKILL.md && grep -q "^## Hard limits" reference/moldy.md && grep -q "Rules that never bend" reference/moldy.md && grep -q "^knowledge/moldy-taste.md" .gitignore && [ -f knowledge/moldy-taste.example.md ]) \
   && ok "moldy: idea-chat route is the first row of the route table, SKILL.md points at reference/moldy.md (Hard limits section), taste file git-ignored + committed example" || no "moldy wiring" "route row / reference / .gitignore / template missing"
 
 # 12b quick view: no Blender needed; known silhouettes; run + report produce a picture with BLENDER=none
