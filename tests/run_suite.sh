@@ -153,6 +153,18 @@ assert d['files']['3mf'].endswith('bridge30_SUPPORTS-ON.3mf') and os.path.exists
 assert 'moving_parts' not in d and 'slice' not in d and d['watch_for'], d
 PY
 
+# 7d make box folder (box + lid + assembled.stl) -> one report, 2 pieces, one 3MF that contents confirms
+"$CAD" make.py box 80 60 40 --lid slide > /dev/null 2>&1
+BD="$MOLD3D_OUT/make/box_80x60x40_slide"
+"$CAD" report.py "$BD" --no-preview > "$T/boxrep.log" 2>&1; rc=$?
+"$CAD" - "$BD" <<'PY' && [ $rc = 0 ] && ok "report on a make-box folder: 2 pieces (box, lid), one 3MF, contents matches" || no "multi-part report" "rc=$rc, see $T/boxrep.log"
+import sys, glob, json; sys.path.insert(0, '.'); import contents3mf
+d = sys.argv[1]; r = json.load(open(d + "/report.json"))
+assert [p["name"] for p in r["pieces"]] == ["box", "lid"], r.get("pieces")
+f3 = glob.glob(d + "/*_SUPPORTS-*.3mf"); assert len(f3) == 1, f3
+c = contents3mf.inspect(f3[0]); assert len(c["pieces"]) == 2 and c["filaments"] == [1], c
+PY
+
 # 8 first-five-minutes: the forge CLI from a DIFFERENT folder (relative paths, default output dir, help, doctor cache, Assumed row)
 FG="$F/bin/forge"; W="$T/cwd"; rm -rf "$W"; mkdir -p "$W"; cp "$T/bridge30.stl" "$W/part.stl"
 v=$(cd "$W" && "$FG" preflight part.stl 2>&1 | head -1)

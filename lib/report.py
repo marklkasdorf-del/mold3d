@@ -76,20 +76,24 @@ def read_assumed(spec):
 
 
 def resolve(arg):
+    """-> (out_dir, stl, pieces). pieces is only set for a make.json folder with several STLs and no <name>.stl (then stl is None)."""
     p = os.path.abspath(arg)
     if os.path.isdir(p):
         name = os.path.basename(p.rstrip("/"))
         stl = os.path.join(p, name + ".stl")
         if not os.path.exists(stl):
             cands = [f for f in glob.glob(os.path.join(p, "*.stl")) if not f.endswith("_heat.stl")]
+            mk = _jload(os.path.join(p, "make.json")) or {}
+            if len(cands) > 1 and mk.get("pieces"):
+                return p, None, mk
             if len(cands) != 1:
                 sys.exit(f"forge report: no <name>.stl in {p}" if not cands else
                          f"forge report: {len(cands)} STLs in {p}; pass the one you want: {', '.join(os.path.basename(c) for c in cands)}")
             stl = cands[0]
-        return p, stl
+        return p, stl, None
     if not os.path.exists(p):
         sys.exit(f"forge report: no such file or folder {p}")
-    return os.path.dirname(p), p
+    return os.path.dirname(p), p, None
 
 
 def _suffix(out_dir, stl):
@@ -223,8 +227,97 @@ def make_3mf(out_dir, stl, R):
     return out
 
 
+_RANK = {"GO": 0, "CAUTION": 1, "GO+SUPPORTS": 2, "NO-GO": 3}
+
+
+def gather_pieces(a, out_dir, mk):
+    """A make folder with several printable pieces (box + lid ...): one report, one 3MF with every piece on the plate."""
+    import numpy as np
+    import trimesh
+    import quickview
+    name = os.path.basename(out_dir.rstrip("/"))
+    pieces = mk["pieces"]
+    sub = os.path.join(out_dir, "_pieces"); os.makedirs(sub, exist_ok=True)
+    pr = printer.load()
+    prs, issues, watch, notes, mesh_sets, specs3 = [], [], [], [], [], []
+    vol = 0.0
+    for pc in pieces:
+        ms = [(pn, trimesh.load(f, force="mesh"), int(sl)) for pn, f, sl in pc["parts"]]
+        joined = trimesh.util.concatenate([m for _, m, _ in ms])
+        pstl = os.path.join(sub, pc["name"] + ".stl"); joined.export(pstl)
+        R, how = get_preflight(sub, pstl, a.fresh, a.allow_tight)
+        prs.append((pc["name"], R, how)); mesh_sets.append(ms)
+        specs3.append((pc["name"], [(pn, f, int(sl)) for pn, f, sl in pc["parts"]]))
+        vol += float(joined.volume)
+    worst = max((R["verdict"] for _, R, _ in prs), key=lambda v: _RANK.get(v, 0))
+    sup_on = any(R.get("supports") == "on" for _, R, _ in prs)
+    multi = len(prs) > 1
+    for n, R, _ in prs:
+        for t in top_issues(R.get("issues", [])):
+            watch.append(f"{n}: {t}" if multi else t)
+        issues += [{k: i.get(k) for k in ("level", "code", "msg", "fix", "kind") if k in i} for i in R.get("issues", [])]
+    # plate layout: pieces side by side in X, 10 mm apart
+    laid, cur, depth, height = [], 0.0, 0.0, 0.0
+    for ms in mesh_sets:
+        allv = np.vstack([m.vertices for _, m, _ in ms]); lo, hi = allv.min(0), allv.max(0)
+        off = np.array([cur - lo[0], -(lo[1] + hi[1]) / 2, -lo[2]])
+        for pn, m, sl in ms:
+            m2 = m.copy(); m2.apply_translation(off)
+            laid.append((m2, quickview.SLOT.get(sl, quickview.SLOT[1])))
+        cur += float(hi[0] - lo[0]) + 10.0; depth = max(depth, float(hi[1] - lo[1])); height = max(height, float(hi[2] - lo[2]))
+    bbox = [round(cur - 10.0, 1), round(depth, 1), round(height, 1)]
+    rep = {"name": name, "generated": datetime.datetime.now().isoformat(timespec="seconds"), "printer": pr.get("name"),
+           "bbox_mm": bbox, "volume_cm3": round(vol / 1000.0, 2),
+           "preflight": {"verdict": worst, "supports": "on" if sup_on else "off",
+                         "supports_text": next((R.get("supports_text") for _, R, _ in prs if R.get("supports") == "on" and R.get("supports_text")), None)
+                         or (prs[0][1].get("supports_text") if not sup_on else None),
+                         "issues": issues, "limits": prs[0][1].get("limits"), "notes": [], "source": ", ".join(h for _, _, h in prs)},
+           "watch_for": watch[:3] if multi else watch,
+           "assumed": {},
+           "pieces": [{"name": n, "verdict": R["verdict"], "supports": R.get("supports")} for n, R, _ in prs]}
+    spec = read_spec(out_dir, os.path.join(out_dir, "x.stl"))
+    if spec:                                          # only when a spec exists (never invent a Checks row)
+        rep["assumed"] = read_assumed(spec)
+    files = {"stl": out_dir}
+    steps = [f for f in mk.get("step_files", []) if os.path.exists(f)]
+    if not a.no_export:
+        if worst == "NO-GO":
+            notes.append("no 3MF written: preflight says NO-GO, so there is no safe supports setting. Fix the geometry first.")
+        else:
+            on = "_SUPPORTS-ON.3mf" if sup_on else "_SUPPORTS-OFF.3mf"; other = "_SUPPORTS-OFF.3mf" if sup_on else "_SUPPORTS-ON.3mf"
+            out3 = os.path.join(out_dir, name + on); old = os.path.join(out_dir, name + other)
+            if os.path.exists(old):
+                os.remove(old)                        # a stale opposite file would be a loaded gun
+            import export3mf, contents3mf
+            export3mf.write_pieces(specs3, out3, {n: R.get("supports") == "on" for n, R, _ in prs}, name)
+            files["3mf"] = out3
+            want = {"pieces": len(pieces), "filaments": len({int(sl) for pc in pieces for _, _, sl in pc["parts"]})}
+            want.update(mk.get("expect") or {})
+            try:
+                bad = contents3mf.compare(contents3mf.inspect(out3), want)
+                if bad:
+                    notes.append("the 3MF does not match what was asked: " + "; ".join(bad))
+            except Exception as e:
+                notes.append(f"could not re-read the 3MF to confirm its contents ({type(e).__name__})")
+    pv, why = find_preview(out_dir, os.path.join(sub, pieces[0]["name"] + ".stl"), not a.no_preview, meshes=laid, name=name)
+    if pv:
+        files["preview"] = pv
+    elif why:
+        notes.append(why)
+    rep["files"] = files
+    if steps:
+        rep["files"]["step"] = steps[0] if len(steps) == 1 else ", ".join(os.path.basename(x) for x in steps)
+    if notes:
+        rep["notes"] = notes
+    rpath = os.path.join(out_dir, "report.json"); files["report"] = rpath
+    json.dump(rep, open(rpath, "w"), indent=1, default=str)
+    return rep
+
+
 def gather(a):
-    out_dir, stl = resolve(a.target)
+    out_dir, stl, mk = resolve(a.target)
+    if stl is None:
+        return gather_pieces(a, out_dir, mk)
     name = os.path.splitext(os.path.basename(stl))[0]
     mech = mech_info(out_dir)
     cal = bool(mech and mech.get("calibration_print"))
@@ -348,7 +441,8 @@ def markdown(rep):
     else:
         rows.append(("Files", f"`{_home(f['stl'])}` (not print-ready)"))
     if "step" in f:
-        rows[-1] = (rows[-1][0], rows[-1][1] + f" · `{os.path.basename(f['step'])}` (CAD, for editing)")
+        stp = [os.path.basename(x.strip()) for x in f["step"].split(",")]
+        rows[-1] = (rows[-1][0], rows[-1][1] + " · " + " · ".join(f"`{x}`" for x in stp) + " (CAD, for editing)")
     lines = [" · ".join(head), "| | |", "|---|---|"] + [f"| {k} | {v} |" for k, v in rows]
     return "\n".join(lines)
 
